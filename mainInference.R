@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: Oct  9 2023 (10:12) 
 ## Version: 
-## Last-Updated: Oct  9 2023 (13:07) 
+## Last-Updated: okt  9 2023 (15:05) 
 ##           By: Brice Ozenne
-##     Update #: 59
+##     Update #: 75
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -294,30 +294,39 @@ n.data <- 10
 dtInference <- simBuyseTest(n.data)
 dtInference[, score := round(score,1)]
 
-score.T <- round(dtInference[treatment=="T",score],1)
-score.C <- round(dtInference[treatment=="C",score],1)
+score.T <- dtInference[treatment=="T",score]
+score.C <- dtInference[treatment=="C",score]
 
-## GPC
+## *** GPC
 BTinference.H1 <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE)
 eSe0.BT <- sensitivity(BTinference.H1, threshold = 0:1, band = TRUE, adj.p.value = TRUE,
                        transformation = FALSE, trace = FALSE)
+##   score estimate        se   lower.ci    upper.ci null      p.value
+## 1     0    -0.48 0.2216303 -0.9143875 -0.04561255    0 0.0303288719
+## 2     1    -0.49 0.1475805 -0.7792524 -0.20074756    0 0.0008994584
+##   lower.band  upper.band adj.p.value
+## 1 -0.9498640 -0.01013601  0.04475506
+## 2 -0.8028758 -0.17712424  0.00147072
+
 eSe0.BT[,c("score","estimate")]
 ##   score estimate
 ## 1     0    -0.48
 ## 2     1    -0.49
 
-Delta0.i <- dtInference.T[,.(Delta = mean(score > score.C) - mean(score.C > score)),
+## *** correlation
+Delta0.i <- dtInference[treatment=="T",.(Delta = mean(score > score.C) - mean(score.C > score)),
                           by = "id"]
-Delta0.j <- dtInference.C[,.(Delta = mean(score.T > score) - mean(score > score.T)),
+Delta0.j <- dtInference[treatment=="C",.(Delta = mean(score.T > score) - mean(score > score.T)),
                           by = "id"]
 
 ## check
 range(attr(eSe0.BT,"iid")[,1]*10 - c(Delta0.j$Delta,Delta0.i$Delta))
 ## [1] 0.48 0.48
 
-Delta1.i <- dtInference.T[,.(Delta = mean(score >= round(score.C+1,1)) - mean(score.C >= round(score+1,1))),
+## use round otherwise does not recognise that 0.3>=0.3 is TRUE probably due to rounding errors
+Delta1.i <- dtInference[treatment=="T",.(Delta = mean(score >= round(score.C+1,1)) - mean(score.C >= round(score+1,1))),
                           by = "id"]
-Delta1.j <- dtInference.C[,.(Delta = mean(score.T >= round(score+1,1)) - mean(score >= round(score.T+1,1))),
+Delta1.j <- dtInference[treatment=="C",.(Delta = mean(score.T >= round(score+1,1)) - mean(score >= round(score.T+1,1))),
                           by = "id"]
 
 ## check
@@ -329,21 +338,114 @@ Delta1.i$Delta
 Delta1.j$Delta
  ## [1]  0.0 -0.2 -0.2 -0.4 -1.0 -1.0 -0.9 -0.2 -0.8  0.0
 cor(c(Delta0.i$Delta,Delta0.j$Delta),c(Delta1.i$Delta,Delta1.j$Delta))
-cor(c(Delta0.i$Delta,Delta0.j$Delta),c(Delta1.i$Delta,Delta1.j$Delta))
-## [1] 0.8516011
-cov2cor(crossprod(attr(eSe0.BT,"iid")))
+## [1] 0.8792872
+R <- cov2cor(crossprod(attr(eSe0.BT,"iid")))
+R
 ##           [,1]      [,2]
 ## [1,] 1.0000000 0.8792872
 ## [2,] 0.8792872 1.0000000
 
-attr(eSe0.BT,"iid")[,2] / c(Delta0.i$Delta + 0.48,Delta0.j$Delta + 0.48)
+## *** FWER
+pmvnorm(lower = rep(-1.96,2), upper = rep(1.96,2), mean = c(0,0), sigma = R)
+## [1] 0.9277588
+## attr(,"error")
+## [1] 1e-15
+## attr(,"msg")
+## [1] "Normal Completion"
 
-getIid(BTinference.H1, center = FALSE)*10 - c(Delta0.j$Delta,Delta0.i$Delta)
-attr(eSe0.BT,"iid")[,2]*10 - c(Delta1.j$Delta,Delta1.i$Delta)
+## *** Adjusted p-values
+eSe0.stats <- eSe0.BT$estimate / eSe0.BT$se
+1-pmvnorm(lower = rep(eSe0.stats[1],2), upper = rep(-eSe0.stats[1],2), mean = c(0,0), sigma = R)
+## [1] 0.04475506
+## attr(,"error")
+## [1] 1e-15
+## attr(,"msg")
+## [1] "Normal Completion"
+1-pmvnorm(lower = rep(eSe0.stats[2],2), upper = rep(-eSe0.stats[2],2), mean = c(0,0), sigma = R)
+## [1] 0.00147072
+## attr(,"error")
+## [1] 1e-15
+## attr(,"msg")
+## [1] "Normal Completion"
 
+## *** critical threshold
+qnorm.adj <- qmvnorm(0.95, mean = c(0,0), sigma = R, tail = "both.tails")
+## $quantile
+## [1] 2.120035
+
+## $f.quantile
+## [1] 1.471865e-05
+
+## attr(,"message")
+## [1] "Normal Completion"
+
+cbind(lower = eSe0.BT$estimate - qnorm.adj$quantile * eSe0.BT$se,
+      upper = eSe0.BT$estimate + qnorm.adj$quantile * eSe0.BT$se)
+##           lower       upper
+## [1,] -0.9498640 -0.01013601
+## [2,] -0.8028758 -0.17712424
+
+## *** transformation
+eSe1.BT <- sensitivity(BTinference.H1, threshold = 0:1, band = TRUE, adj.p.value = TRUE,
+                       transformation = TRUE, trace = FALSE)
+##   score estimate        se   lower.ci    upper.ci null     p.value
+## 1     0    -0.48 0.2216303 -0.7959335  0.04142476    0 0.069364812
+## 2     1    -0.49 0.1475805 -0.7243353 -0.15417562    0 0.005776528
+##   lower.band  upper.band adj.p.value
+## 1 -0.8122186  0.08732288 0.098720663
+## 2 -0.7387823 -0.12369087 0.009017036
+
+eSe1.stats <- atanh(eSe0.BT$estimate) / (eSe0.BT$se/(1-eSe0.BT$estimate^2))
+eSe1.stats
+## [1] -1.816036 -2.760204
+## 1-pmvnorm(lower = rep(eSe1.stats[1],2), upper = rep(-eSe1.stats[1],2), mean = c(0,0), sigma = R)
+## [1] 0.09872066
+## attr(,"error")
+## [1] 1e-15
+## attr(,"msg")
+## [1] "Normal Completion"
+1-pmvnorm(lower = rep(eSe1.stats[2],2), upper = rep(-eSe1.stats[2],2), mean = c(0,0), sigma = R)
+## [1] 0.009017036
+## attr(,"error")
+## [1] 1e-15
+## attr(,"msg")
+## [1] "Normal Completion"
+cbind(lower = tanh(atanh(eSe0.BT$estimate) - qnorm.adj$quantile * eSe0.BT$se/(1-eSe0.BT$estimate^2)),
+      upper = tanh(atanh(eSe0.BT$estimate) + qnorm.adj$quantile * eSe0.BT$se/(1-eSe0.BT$estimate^2)))
+##           lower       upper
+## [1,] -0.8122186  0.08732288
+## [2,] -0.7387823 -0.12369087
 
 ## ** 1.5.3 Finite sample performance
+allResS.tempo2 <- readRDS("results/aggregated-FWER.rds")
 
+## *** FWER and power
+allResS.tempo2[mu==0, range(100*power)]
+## [1] 8.832000 9.824393
+allResS.tempo2[mu==0, range(100*power.bonf)]
+## [1] 0.932000 1.212048
+range(allResS.tempo2[mu==1, 100*(power.bonf-power)])
+## [1] -35.604  -0.064
+allResS.tempo2[mu==0, .(n,100*power.band)]
+##      n       V2
+## 1:  10 3.876155
+## 2:  20 4.312000
+## 3:  35 4.376000
+## 4:  50 4.808000
+## 5:  75 4.876000
+## 6: 100 4.904000
+## 7: 150 4.704000
+## 8: 200 4.960000
+range(allResS.tempo2[mu==1, 100*(power.band-power)])
+## [1] -14.29372   0.00000
+
+## *** coverage
+allResS.tempo2[, range(100*coverage)]
+## [1] 90.17561 95.16800
+allResS.tempo2[mu==0, range(100*coverage.bonf)]
+## [1] 98.78795 99.06800
+allResS.tempo2[mu==0, range(100*coverage.band)]
+## [1] 95.02400 96.13585
 
 ##----------------------------------------------------------------------
 ### mainInference.R ends here
