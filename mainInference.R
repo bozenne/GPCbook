@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: Oct  9 2023 (10:12) 
 ## Version: 
-## Last-Updated: okt  9 2023 (15:05) 
+## Last-Updated: dec  6 2023 (14:57) 
 ##           By: Brice Ozenne
-##     Update #: 75
+##     Update #: 87
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -27,13 +27,12 @@ library(mvtnorm)
 
 set.seed(10)
 n.data <- 10
-dtInference <- simBuyseTest(n.data)
+dtInference <- simbuysetest(n.data)
 dtInference[, score := round(score,1)]
 
 ## table 1 --> see tableInference-1.R
 
 ## ** 1.3.2 First order H-decomposition
-
 BTinference.H1 <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE)
 
 #### Example (table 1.1)
@@ -58,6 +57,19 @@ dtInference[treatment=="C",score][1] < dtInference[treatment=="T",score]
 getIid(BTinference.H1, statistic = "favorable", scale = FALSE, center = TRUE)[1]
 ## [1] 0.44
 
+## first vs. second order
+BuyseTest.options(order.Hprojection = 2)
+BTinference.H2 <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE)
+BuyseTest.options(order.Hprojection = 1)
+
+confint(BTinference.H2, statistic = "netBenefit", order.Hprojection = 1)
+##       estimate        se   lower.ci   upper.ci null    p.value
+## score    -0.48 0.2216303 -0.7959335 0.04142476    0 0.06936481
+confint(BTinference.H2, statistic = "netBenefit", order.Hprojection = 2)
+##       estimate        se   lower.ci   upper.ci null    p.value
+## score    -0.48 0.2278245 -0.8016426 0.05716099    0 0.07728498
+100*0.2216303/0.2278245
+
 ## * 1.4 Comparison of inferential methods
 ## ** 1.4.1 Confidence intervals and p-values based on asymptotic approximation
 
@@ -65,35 +77,71 @@ getIid(BTinference.H1, statistic = "favorable", scale = FALSE, center = TRUE)[1]
 score.T <- dtInference[treatment=="T",score]
 score.C <- dtInference[treatment=="C",score]
 
-Delta.i <- dtInference.T[,.(Delta = mean(score > score.C) - mean(score.C > score)),
-                         by = "id"]
-Delta.j <- dtInference.C[,.(Delta = mean(score.T > score) - mean(score > score.T)),
-                         by = "id"]
+Delta.i <- dtInference[treatment=="T",.(PW = mean(score > score.C),
+                                        PL = mean(score.C > score),
+                                        Delta = mean(score > score.C) - mean(score.C > score)),
+                       by = "id"]
+Delta.j <- dtInference[treatment=="C",.(PW = mean(score.T > score),
+                                        PL = mean(score > score.T),
+                                        Delta = mean(score.T > score) - mean(score > score.T)),
+                       by = "id"]
 
 
 range(c(Delta.i$Delta,Delta.j$Delta))
 ## [1] -1.0  0.4
 
-#### No transformation
-sigma.asym <- mean((Delta.i$Delta-coef(GPC))^2)/n.data + mean((Delta.j$Delta-coef(GPC))^2)/n.data
+#### No transformation (first order)
+Delta.Hat <- coef(BTinference.H1)
+
+sigmaDelta.E <- mean((Delta.i$Delta-Delta.Hat)^2)
+sigmaDelta.C <- mean((Delta.j$Delta-Delta.Hat)^2)
+
+confint(BTinference.H2, statistic = "netBenefit", order.Hprojection = 1)$se^2
+sigma.asym <- sigmaDelta.E/n.data + sigmaDelta.C/n.data
+sigma.asym
 ## [1] 0.04912
-c(coef(GPC) - 1.96*sqrt(sigma.asym), coef(GPC) + 1.96*sqrt(sigma.asym))
+c(Delta.Hat - 1.96*sqrt(sigma.asym), Delta.Hat + 1.96*sqrt(sigma.asym))
 ## [1] -0.91439543 -0.04560457
-2*(1-pnorm(abs(coef(GPC)/sqrt(sigma.asym))))
+2*(1-pnorm(abs(Delta.Hat/sqrt(sigma.asym))))
 ## [1] 0.03032887
 
+#### No transformation (second order)
+PW.Hat <- coef(BTinference.H1, statistic = "favorable")
+PL.Hat <- coef(BTinference.H1, statistic = "unfavorable")
+
+sigmaPW.E <- mean((Delta.i$PW-PW.Hat)^2)
+sigmaPW.C <- mean((Delta.j$PW-PW.Hat)^2)
+sigmaPL.E <- mean((Delta.i$PL-PL.Hat)^2)
+sigmaPL.C <- mean((Delta.j$PL-PL.Hat)^2)
+
+sigmaPWL.E <- mean((Delta.i$PW-PW.Hat)*(Delta.i$PL-PL.Hat))
+sigmaPWL.C <- mean((Delta.j$PW-PW.Hat)*(Delta.j$PL-PL.Hat))
+
+confint(BTinference.H2, statistic = "favorable", order.Hprojection = 2)$se^2
+((n.data-1)*sigmaPW.E + (n.data-1)*sigmaPW.C + PW.Hat * (1-PW.Hat))/n.data^2
+## confint(BTinference.H2, statistic = "unfavorable", order.Hprojection = 2)$se^2
+## (n.data-1)*sigmaPW.E/n.data^2 + (n.data-1)*sigmaPW.C/n.data^2 + PW.Hat * (1-PW.Hat)/n.data^2
+
+confint(BTinference.H2, statistic = "netBenefit", order.Hprojection = 2)$se^2-confint(BTinference.H2, statistic = "netBenefit", order.Hprojection = 1)$se^2
+(PW.Hat *(1-PW.Hat) + PL.Hat *(1-PL.Hat) + 2*PW.Hat*PL.Hat - sigmaPW.E - sigmaPW.C - sigmaPL.E - sigmaPL.C + 2*sigmaPWL.E + 2*sigmaPWL.C)/n.data^2
+## [1] 0.002784
+
+confint(BTinference.H2, statistic = "netBenefit", order.Hprojection = 2, transform = FALSE)$se^2
+sigmaDelta.E/n.data + sigmaDelta.C/n.data + (PW.Hat *(1-PW.Hat) + PL.Hat *(1-PL.Hat) + 2*PW.Hat*PL.Hat - sigmaPW.E - sigmaPW.C - sigmaPL.E - sigmaPL.C + 2*sigmaPWL.E + 2*sigmaPWL.C)/n.data^2
+((n.data-1) * sigmaDelta.E + (n.data-1) * sigmaDelta.C + PW.Hat *(1-PW.Hat) + PL.Hat *(1-PL.Hat) + 2*PW.Hat*PL.Hat)/n.data^2
+## [1] 0.051904
+
 #### Transformation
-sigma.tasym <- sigma.asym / (1-coef(GPC)^2)^2
+sigma.tasym <- sigma.asym / (1-Delta.Hat^2)^2
 ## [1] 0.08293317
-tci <- c(atanh(coef(GPC)) - 1.96*sqrt(sigma.tasym), atanh(coef(GPC)) + 1.96*sqrt(sigma.tasym))
+tci <- c(atanh(Delta.Hat) - 1.96*sqrt(sigma.tasym), atanh(Delta.Hat) + 1.96*sqrt(sigma.tasym))
 ## [1] -1.08742741  0.04145885
 tanh(tci)
 ## [1] -0.79593726  0.04143511
-2*(1-pnorm(abs(atanh(coef(GPC))/sqrt(sigma.tasym))))
+2*(1-pnorm(abs(atanh(Delta.Hat)/sqrt(sigma.tasym))))
 ## [1] 0.06936481
 
 ## ** 1.4.2 Bootstrap confidence intervals and p-values
-
 BTinference.boot <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE,
                               seed = 10, method.inference  = "studentized bootstrap", strata.resampling = "treatment",
                               n.resampling = 15)
@@ -105,14 +153,14 @@ quantile(BTinference.boot@DeltaResampling[,"score","netBenefit"], c(0.025,0.975)
 
 sigma.boot <- var(BTinference.boot@DeltaResampling[,"score","netBenefit"])
 ## [1] 0.06346667
-c(coef(GPC) - 1.96*sqrt(sigma.boot), coef(GPC) + 1.96*sqrt(sigma.boot))
+c(coef(GPC) - 1.96*sqrt(sigma.boot), Delta.Hat + 1.96*sqrt(sigma.boot))
 ## [1] -0.97377479  0.01377479
 
 t.boot <- (BTinference.boot@DeltaResampling[,"score","netBenefit"]-coef(BTinference.boot))/sqrt(BTinference.boot@covarianceResampling[,"score","netBenefit"])
 qt.boot <- quantile(t.boot,c(0.025,0.975))
 ##      2.5%     97.5% 
 ## -1.811245  1.917857 
-c(coef(GPC) + qt.boot[1]*sqrt(sigma.asym), coef(GPC) + qt.boot[2]*sqrt(sigma.asym))
+c(Delta.Hat + qt.boot[1]*sqrt(sigma.asym), Delta.Hat + qt.boot[2]*sqrt(sigma.asym))
 ##        2.5%       97.5% 
 ## -0.88142676 -0.05494471 
 
@@ -287,6 +335,18 @@ dt.time
 ## 6:   perm-stud 3.61 3.98 4.79 5.88 8.58 12.16 22.36 36.32
 
 ## * 1.5 Adjustment for multiple testing
+
+df.trial <- as.data.frame(list(group = c("A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","A","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B","B"),
+                               status = c(1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,0L,0L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,0L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,0L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,0L,1L,0L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,0L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,0L,0L,1L,1L,1L,1L,1L,1L,1L,1L,1L,0L,1L,0L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,1L,0L),
+                               time = c(13.9,15.7,7.5,19.8,13.8,6.6,21.4,11.5,21.4,14.3,18.2,18.6,10.3,30.3,32.4,25.8,36,9.4,16.2,51.1,21.8,17.2,33.1,8.6,15.9,9.5,21.9,11.1,59.5,13.4,18.1,29,17.8,12.6,30.1,34.2,4.6,22.2,16.2,6.7,8.6,23.7,23.1,6.9,31.1,10.9,91.5,9.6,27.4,47.2,38.1,20.3,11.8,10.5,12.4,8.1,33.3,19.6,30.8,14.5,10.7,10,8.8,26.2,8.3,6.6,16,6.6,8,31.9,22.9,4.7,6.1,6.6,46.6,81.7,14.5,27.1,30.7,15.9,7.6,9.1,4.6,9.7,23.6,24.7,7.8,14.4,15.5,9.1,4.7,17.7,32.9,21.3,35.6,17.8,36.4,5.3,26.1,17.6,13.6,19,18.4,32.5,21,39.8,25.2,36,26.8,29,6.9,31.8,20.1,17.4,58.2,33.9,54.2,50,11.4,25.5,34.6,50,22.9,4.1,19.6,10.8,48,8.4,11.3,30.2,52.8,30.6,30.5,14.2,21.9,30.6,10.6,4.9,5.5,29.6,56.4,49,42.8,60.4,16.9,17.7,10.5,36.7,37.1,44,18.7,12.7,22.8,27.5,29.3,31.4,44.6,33.4,35.7,35.8,30.8,37.8,43.7,34.9,16,17.9,22.3,40.4,5.7,5.1,24.4,11.3,20.5,37.7,93.3,68.4,16.8,21.4,6.4,4,14,30.4,9.2,6.6,98.1,4,56.7,20.1,16.2,8.2,28.7,39,17,30.8,14.1,9.7,11.2,25.7,41.7,19.8),
+                               toxicity = c(0,0,1,0,0,0,0,0,0,0,1,0,1,0,0,0,0,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1,1,0,1,1,0,0,1,1,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0,1,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,1,0,0,1,0,1,1,0,0,0,1,0,1,0,1,0,0,0,1,0,0,0,0,1,0,1,1,1,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0),
+                               strata = structure(c(2L,2L,2L,1L,2L,1L,1L,1L,1L,2L,1L,1L,2L,1L,1L,1L,1L,1L,1L,1L,2L,2L,1L,1L,1L,1L,1L,1L,2L,1L,1L,1L,1L,2L,2L,1L,1L,1L,2L,1L,2L,1L,2L,2L,2L,2L,2L,2L,2L,2L,2L,1L,2L,1L,1L,2L,1L,2L,2L,2L,1L,1L,1L,2L,2L,1L,2L,1L,1L,1L,1L,1L,1L,1L,2L,1L,2L,1L,1L,2L,1L,1L,2L,2L,1L,1L,1L,2L,1L,2L,1L,2L,2L,1L,1L,1L,2L,1L,1L,2L,2L,2L,1L,1L,2L,1L,2L,2L,2L,2L,1L,2L,1L,1L,1L,2L,2L,2L,1L,2L,2L,2L,1L,1L,1L,2L,2L,2L,1L,2L,1L,1L,2L,2L,2L,1L,1L,1L,1L,2L,2L,1L,1L,2L,2L,1L,2L,2L,2L,2L,2L,2L,1L,1L,1L,2L,2L,1L,2L,1L,1L,1L,2L,1L,2L,1L,1L,1L,1L,1L,2L,1L,1L,2L,1L,1L,1L,1L,1L,1L,1L,2L,1L,1L,1L,1L,1L,1L,2L,2L,1L,2L,2L,2L,1L,1L,2L,1L,2L,2L),levels = c("1", "2"),class = "factor")))
+
+e.mBT <- BuyseTest(group ~ cont(toxicity) + strata, data = df.trial)
+confint(e.mBT, strata = TRUE)
+
+
+
 ## ** 1.5.2 Dunnett procedure for GPC
 
 set.seed(10)
