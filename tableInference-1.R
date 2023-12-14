@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: Oct  9 2023 (10:17) 
 ## Version: 
-## Last-Updated: Oct  9 2023 (11:40) 
+## Last-Updated: dec 14 2023 (15:18) 
 ##           By: Brice Ozenne
-##     Update #: 11
+##     Update #: 12
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -29,7 +29,7 @@ dtInference[, score := round(score,1)]
 
 GPC <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE)
 
-djack <- sapply(1:20, function(i){
+jack <- sapply(1:20, function(i){
     coef(BuyseTest(treatment ~ cont(score), data = dtInference[-i], trace = FALSE), statistic = "favorable")
 })
 
