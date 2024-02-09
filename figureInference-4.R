@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: Oct  9 2023 (11:38) 
 ## Version: 
-## Last-Updated: Oct  9 2023 (12:17) 
+## Last-Updated: feb  9 2024 (15:11) 
 ##           By: Brice Ozenne
-##     Update #: 11
+##     Update #: 8
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -15,72 +15,71 @@
 ## 
 ### Code:
 
+library(BuyseTest)
+library(data.table)
 library(ggplot2)
-library(ggpubr)
 
-## * generate figure 4
-allResS.tempo <- readRDS("results/aggregated-power.rds")
-convertion <- c("Ustat" = "Asymptotic",
-                "Ustat-trans" = "Asymptotic with transformation",
-                "boot-perc" = "Percentile bootstrap",
-                "boot-stud" = "Studentized bootstrap",
-                "perm-perc" = "Permutation",
-                "perm-stud" = "Studentized permutation")
+## * simulate data
+set.seed(10)
+n.data <- 10
+dtInference <- simBuyseTest(n.data)
+dtInference[, score := round(score,1)]
+
+## * generate figure 2
+
+## ** run GPC
+GPC.figure2 <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE,
+                         seed = 10, method.inference  = "studentized bootstrap", strata.resampling = "treatment", n.resampling = 1e4)
+
+## ** gather results
+NB.boot <- GPC.figure2@DeltaResampling[,,"netBenefit"]
+seNB.boot <- GPC.figure2@covarianceResampling[,,"netBenefit"]
+
+dt.boot <- rbind(data.table(estimate = NB.boot,
+                            scale = "original scale", type = "bootstrap estimates"),
+                 data.table(estimate = atanh(NB.boot),
+                            scale = "atanh scale", type = "bootstrap estimates"),
+                 data.table(estimate = (NB.boot-coef(GPC.figure2))/sqrt(seNB.boot),
+                            scale = "original scale", type = "centered bootstrap statistics"),
+                 data.table(estimate = (atanh(NB.boot)-atanh(coef(GPC.figure2)))/sqrt(seNB.boot/(1-NB.boot^2)^2),
+                            scale = "atanh scale", type = "centered bootstrap statistics"))
+dt.boot <- dt.boot[!is.na(estimate) & !is.infinite(estimate) & abs(estimate)<5]
+
+dt.bootQ <- dt.boot[, .(Qlower = quantile(estimate, prob = 0.025),
+                        Qupper = quantile(estimate, prob = 0.975)),
+                    by = c("scale","type")]
+dt.bootQ
+
+dt.boot$type <- factor(dt.boot$type, levels = unique(dt.boot$type))
+dt.boot$scale <- factor(dt.boot$scale, levels = unique(dt.boot$scale))
+dt.bootQ$type <- factor(dt.bootQ$type, levels = unique(dt.boot$type))
+dt.bootQ$scale <- factor(dt.bootQ$scale, levels = unique(dt.boot$scale))
+dt.bootLine <- dt.boot[, .(estimate = seq(-5,5,length.out=1000),
+                           density = dnorm(seq(-5,5,length.out=1000), mean = mean(estimate), sd = sd(estimate))), by = "type"][density > 0.001]
 
 
-## ** type 1 error
-figure4.A <- ggplot(allResS.tempo[mu==0], aes(x = n, y = power,
-                                             group = method.legend, shape = method.legend, color = method.legend, linetype = method.legend))
-figure4.A <- figure4.A + geom_hline(yintercept = 0.05, size = 2, color = "lightgray")
-figure4.A <- figure4.A + geom_line(linewidth = 1.15) + geom_point(size = 3)
-figure4.A <- figure4.A + facet_grid(mu.legend ~ statistic.legend)
-figure4.A <- figure4.A + scale_linetype_manual(values = c(1,1,2,2,3,3), breaks = convertion) 
-figure4.A <- figure4.A + scale_shape_manual(values = rep(c(8,15),3), breaks = convertion) 
-figure4.A <- figure4.A + scale_color_manual(values = rep(c("darkgray","black"),3), breaks = convertion) 
-figure4.A <- figure4.A + coord_cartesian(y = c(0.04,0.1))
-figure4.A <- figure4.A + guides(color = guide_legend(nrow = 6, byrow = TRUE))
-figure4.A <- figure4.A + labs(x = "Sample size (per group)", y = "Type 1 error", color = "Inferential method\n", shape = "Inferential method\n", linetype = "Inferential method\n")
-figure4.A <- figure4.A + theme(text = element_text(size=15), 
-                             axis.line = element_line(linewidth = 1.25),
-                             axis.ticks = element_line(linewidth = 2),
-                             axis.ticks.length=unit(.25, "cm"),
-                             legend.text=element_text(size=11),
-                             legend.key.width = unit(4,"line"))
-figure4.A
+## ** generate figure
+gg.histBoot <- ggplot()
+gg.histBoot <- gg.histBoot + geom_histogram(data = dt.boot, mapping = aes(x=estimate, y=after_stat(density)), color = "black")
+gg.histBoot <- gg.histBoot + geom_line(data = dt.bootLine, mapping = aes(x = estimate, y = density), color = "darkgrey", linewidth = 1.25)
+gg.histBoot <- gg.histBoot + geom_point(data = dt.bootQ, mapping = aes(x=Qlower, y = -0.045, color = "quantile [2.5%;97.5%]", shape = "quantile [2.5%;97.5%]"), size = 4)
+gg.histBoot <- gg.histBoot + geom_point(data = dt.bootQ, mapping = aes(x=Qupper, y = -0.045, color = "quantile [2.5%;97.5%]", shape = "quantile [2.5%;97.5%]"), size = 4)
+gg.histBoot <- gg.histBoot + facet_grid(scale~type, scales="free")
+gg.histBoot <- gg.histBoot + labs(y = "Relative frequency", x = NULL, shape = "", color = "")
+gg.histBoot <- gg.histBoot + scale_colour_manual(values = c("grey")) + scale_shape_manual(values = 17)
+gg.histBoot <- gg.histBoot + scale_x_continuous(n.breaks = 8)
+gg.histBoot <- gg.histBoot + theme(text = element_text(size=15), 
+                                   panel.grid.minor.x = element_blank(),
+                                   panel.grid.major.x = element_blank(),
+                                   axis.line = element_line(linewidth = 1.25),
+                                   axis.ticks = element_line(linewidth = 1.5),
+                                   axis.ticks.length=unit(.25, "cm"),
+                                   legend.key.size = unit(3,"line"),
+                                   legend.position = "bottom")
+gg.histBoot
 
-
-## ** coverage
-figure4.B <- ggplot(allResS.tempo[allResS.tempo$method.legend %in% convertion[1:4]],
-                 aes(x = n, y = coverage,
-                     group = method.legend, shape = method.legend, color = method.legend, linetype = method.legend))
-figure4.B <- figure4.B + geom_hline(yintercept = 0.95, linewidth = 2, color = "lightgray")
-figure4.B <- figure4.B + geom_line(linewidth = 1.15) + geom_point(size = 3)
-figure4.B <- figure4.B + facet_grid(mu.legend ~ statistic.legend) 
-figure4.B <- figure4.B + scale_linetype_manual(values = c(1,1,2,2), breaks = convertion[1:4]) 
-figure4.B <- figure4.B + scale_shape_manual(values = c(8,15,8,15), breaks = convertion[1:4]) 
-figure4.B <- figure4.B + scale_color_manual(values = rep(c("darkgray","black"),2), breaks = convertion[1:4]) 
-figure4.B <- figure4.B + coord_cartesian(y = c(0.9,0.96))
-figure4.B <- figure4.B + labs(x = "Sample size (per group)", y = "Coverage", color = "Inferential method\n", shape = "Inferential method\n", linetype = "Inferential method\n")
-figure4.B <- figure4.B + guides(shape = guide_legend(nrow = 2, byrow = TRUE))
-figure4.B <- figure4.B + guides(color = guide_legend(nrow = 2, byrow = TRUE))
-figure4.B <- figure4.B + guides(linetype = guide_legend(nrow = 2, byrow = TRUE))
-figure4.B <- figure4.B + theme(text = element_text(size=15), 
-                         axis.line = element_line(linewidth = 1.25),
-                         axis.ticks = element_line(linewidth = 2),
-                         axis.ticks.length=unit(.25, "cm"),
-                         legend.key.width = unit(4,"line"),
-                         legend.position = "bottom")
-figure4.B
-
-## ** merge
-figure4 <- ggarrange(figure4.A + guides(color = guide_legend(nrow = 3, byrow = TRUE), linetype = guide_legend(nrow = 3, byrow = TRUE), shape = guide_legend(nrow = 3, byrow = TRUE)) + ggtitle("A"),
-                     figure4.B + ggtitle("B"), common.legend = TRUE, legend = "bottom", ncol = 1,
-                     heights = c(3, 4, 4), nrow = 2, align = "v")
-print(figure4)
-
-ggsave(figure4, filename = "figures/fig_inference_simulation-type1.pdf", width = 9, height = 8,
-       device = cairo_pdf)
-
+## gg.histBoot
+ggsave(gg.histBoot, filename = "figures/fig_inference_bootstrap.pdf", width = 9, height = 6)
 
 ##----------------------------------------------------------------------
 ### figureInference-4.R ends here

@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: Oct  9 2023 (10:12) 
 ## Version: 
-## Last-Updated: dec  6 2023 (14:57) 
+## Last-Updated: feb  9 2024 (16:08) 
 ##           By: Brice Ozenne
-##     Update #: 87
+##     Update #: 117
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -27,7 +27,7 @@ library(mvtnorm)
 
 set.seed(10)
 n.data <- 10
-dtInference <- simbuysetest(n.data)
+dtInference <- simBuyseTest(n.data)
 dtInference[, score := round(score,1)]
 
 ## table 1 --> see tableInference-1.R
@@ -48,6 +48,10 @@ dtInference[treatment=="T",score][1] > dtInference[treatment=="C",score]
 ## [1] 0.04
 getIid(BTinference.H1, statistic = "favorable", scale = FALSE, center = TRUE)[11]
 ## [1] 0.04
+(coef(BTinference.H1, statistic = "favorable")-coef(BuyseTest(treatment ~ cont(score), data = dtInference[-11], trace = FALSE), statistic = "favorable"))*9
+## [1] 0.04
+9*(26/100 - 23/90)
+
 
 #### Control group
 dtInference[treatment=="C",score][1] < dtInference[treatment=="T",score]
@@ -60,7 +64,6 @@ getIid(BTinference.H1, statistic = "favorable", scale = FALSE, center = TRUE)[1]
 ## first vs. second order
 BuyseTest.options(order.Hprojection = 2)
 BTinference.H2 <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE)
-BuyseTest.options(order.Hprojection = 1)
 
 confint(BTinference.H2, statistic = "netBenefit", order.Hprojection = 1)
 ##       estimate        se   lower.ci   upper.ci null    p.value
@@ -68,7 +71,8 @@ confint(BTinference.H2, statistic = "netBenefit", order.Hprojection = 1)
 confint(BTinference.H2, statistic = "netBenefit", order.Hprojection = 2)
 ##       estimate        se   lower.ci   upper.ci null    p.value
 ## score    -0.48 0.2278245 -0.8016426 0.05716099    0 0.07728498
-100*0.2216303/0.2278245
+
+BuyseTest.options(order.Hprojection = 1)
 
 ## * 1.4 Comparison of inferential methods
 ## ** 1.4.1 Confidence intervals and p-values based on asymptotic approximation
@@ -144,90 +148,100 @@ tanh(tci)
 ## ** 1.4.2 Bootstrap confidence intervals and p-values
 BTinference.boot <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE,
                               seed = 10, method.inference  = "studentized bootstrap", strata.resampling = "treatment",
-                              n.resampling = 15)
+                              n.resampling = 10^4)
+eNBT.boot <- BTinference.boot@DeltaResampling[,"score","netBenefit"]
+eNBTse.boot <- BTinference.boot@covarianceResampling[,"score","netBenefit"]
+table(BTinference.boot@DeltaResampling[,"score","netBenefit"])["0"]
 
-## *** confidence intervals
-quantile(BTinference.boot@DeltaResampling[,"score","netBenefit"], c(0.025,0.975))
-##   2.5%  97.5% 
-## -0.753  0.066 
+## *** confidence intervals (no transformation)
+quantile(eNBT.boot, c(0.025,0.975))
+##  2.5% 97.5% 
+## -0.86  0.00 
+quantile(eNBT.boot, probs = 1-c(0.0480,0.0481,0.0545,0.0596,0.0597)/2) ## close to 0
+##+     97.6%   97.595%   97.275%    97.02%   97.015% 
+##  0.000480  0.000000  0.000000  0.000000 -0.009403 
+confint(BTinference.boot, method.ci.resampling = "percentile", transform = FALSE)
+##       estimate       se lower.ci upper.ci null p.value
+## score    -0.48 0.226883    -0.86        0    0  0.0545
 
-sigma.boot <- var(BTinference.boot@DeltaResampling[,"score","netBenefit"])
-## [1] 0.06346667
-c(coef(GPC) - 1.96*sqrt(sigma.boot), Delta.Hat + 1.96*sqrt(sigma.boot))
-## [1] -0.97377479  0.01377479
+sigma.boot <- var(eNBT.boot)
+sigma.boot
+## [1] 0.0514759
+coef(BTinference.boot) + qnorm(c(0.025,0.975)) * sqrt(sigma.boot)
+## [1] -0.92468254 -0.03531746
+2*(1-pnorm(abs(coef(BTinference.boot)/sqrt(sigma.boot))))
+## [1] 0.03437648
+confint(BTinference.boot, method.ci.resampling = "gaussian", transform = FALSE)
+##       estimate       se   lower.ci    upper.ci null    p.value
+## score    -0.48 0.226883 -0.9246825 -0.03531746    0 0.03437648
 
-t.boot <- (BTinference.boot@DeltaResampling[,"score","netBenefit"]-coef(BTinference.boot))/sqrt(BTinference.boot@covarianceResampling[,"score","netBenefit"])
+t.boot <- (eNBT.boot-coef(BTinference.boot))/sqrt(eNBTse.boot)
 qt.boot <- quantile(t.boot,c(0.025,0.975))
+qt.boot
 ##      2.5%     97.5% 
-## -1.811245  1.917857 
-c(Delta.Hat + qt.boot[1]*sqrt(sigma.asym), Delta.Hat + qt.boot[2]*sqrt(sigma.asym))
+## -3.457404  1.741143 
+Delta.Hat + qt.boot*sqrt(sigma.asym)
 ##        2.5%       97.5% 
-## -0.88142676 -0.05494471 
-
-## *** p-value
-quantile(BTinference.boot@DeltaResampling[,"score","netBenefit"],(13:15)/15) ## close to 0
-##  86.66667%  93.33333%       100% 
-## -0.2893333 -0.1906667  0.2200000 
-
-sort(t.boot)[14:15]
-##        10         4 
-## 0.9486272 2.4397502 
-coef(GPC) + sort(t.boot)[14:15]*sqrt(sigma.asym)
-##          10           4 
-## -0.26975545  0.06072262 
-1/(15+1)
-## [1] 0.0625
-
-## *** transformation
-BTinference.boot10000 <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE,
-                                   seed = 10, method.inference  = "studentized bootstrap", strata.resampling = "treatment", n.resampling = 1e4)
-confint(BTinference.boot10000, method.ci = "studentized", transformation = FALSE)
+## -1.24626556 -0.09410991 
+Delta.Hat + quantile(t.boot, 1-c(0.0192,0.0194,0.0195)/2) * sqrt(sigma.asym)
+##       99.03% 
+## 0.0003974146 
+confint(BTinference.boot, method.ci.resampling = "studentized", transform = FALSE)
 ##       estimate        se  lower.ci    upper.ci null p.value
 ## score    -0.48 0.2216303 -1.246266 -0.09410991    0  0.0194
 
-confint(BTinference.boot10000, method.ci = "studentized", transformation = TRUE)
+
+## *** confidence intervals (transformation)
+eNBT.tboot <- atanh(eNBT.boot)
+var(eNBT.tboot)
+## [1] NaN
+1.1*min(eNBT.tboot[!is.infinite(eNBT.tboot)])
+## [1] -2.527316
+eNBT.tboot[is.infinite(eNBT.tboot)] <- 1.1*min(eNBT.tboot[!is.infinite(eNBT.tboot)])
+sigma.tboot <- var(eNBT.tboot)
+sigma.tboot
+## [1] 0.1162674
+2*(1-pnorm(abs(atanh(coef(BTinference.boot))/sqrt(sigma.tboot))))
+## [1] 0.1250868
+
+confint(BTinference.boot, method.ci.resampling = "gaussian", transform = TRUE)
+##       estimate       se   lower.ci upper.ci null   p.value
+## score    -0.48 0.226883 -0.8309795  0.14431    0 0.1250868
+
+t.tboot <- (atanh(eNBT.boot)-atanh(coef(BTinference.boot)))/sqrt(eNBTse.boot/(1-eNBT.boot^2)^2)
+t.tboot[abs(eNBT.boot)==1] <- atanh(eNBT.boot)[abs(eNBT.boot)==1]
+qt.tboot <- quantile(t.tboot,c(0.025,0.975), na.rm = TRUE)
+qt.tboot
+##      2.5%     97.5% 
+## -1.825162  1.897063 
+
+tanh(atanh(Delta.Hat) + qt.tboot*sqrt(sigma.asym/(1-Delta.Hat^2)^2))
+##        2.5%       97.5% 
+## -0.78126017  0.02333005 
+
+confint(BTinference.boot, method.ci.resampling = "studentized", transform = TRUE)
 ##       estimate        se   lower.ci   upper.ci null p.value
 ## score    -0.48 0.2216303 -0.7812602 0.02333005    0  0.0617
 
+
+
 ## ** 1.4.3 Permutation p-values
 BTinference.perm <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE,
-                              seed = 10, method.inference  = "studentized permutation", n.resampling = 15)
+                              seed = 10, method.inference  = "studentized permutation", n.resampling = 10000)
 
-abs(BTinference.perm@DeltaResampling[,"score","netBenefit"]) > abs(coef(BTinference.perm))
-##     1     2     3     4     5     6     7     8     9    10    11    12    13 
-## FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE FALSE 
-##    14    15 
-##  TRUE FALSE
-BTinference.perm@DeltaResampling[,"score","netBenefit"][14]
-##   14 
-## 0.59 
-2/16
-## [1] 0.125
+confint(BTinference.perm, method = "percentile")
+##       estimate        se lower.ci upper.ci null    p.value
+## score    -0.48 0.2623938       NA       NA    0 0.06869313
+confint(BTinference.perm, method = "studentized")
+##       estimate        se lower.ci upper.ci null    p.value
+## score    -0.48 0.2216303       NA       NA    0 0.05819418
 
-BTinference.perm10000 <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE,
-                                   seed = 10, method.inference  = "studentized permutation", n.resampling = 10000)
-
-var(BTinference.perm10000@DeltaResampling[,"score","netBenefit"])
+var(BTinference.perm@DeltaResampling[,"score","netBenefit"])
 ## [1] 0.0688505
-var(BTinference.boot10000@DeltaResampling[,"score","netBenefit"])
+var(BTinference.boot@DeltaResampling[,"score","netBenefit"])
 ## [1] 0.0514759
 
-## *** exchangeability
 
-set.seed(4)
-X <- rnorm(10, sd = 1)
-Y <- rnorm(100, sd = sqrt(0.01))
-index <- sample.int(110,100,replace =FALSE)
-Z1 <- c(X,Y)[index]
-Z2 <- c(X,Y)[-index]
-c(meanX = mean(X), meanY = mean(Y), sdX = sd(X), sdY = sd(Y), diffMean = mean(X)-mean(Y))
-##       meanX       meanY         sdX         sdY    diffMean 
-## 0.566529289 0.001919028 1.047353007 0.090627580 0.564610261 
-
-## *** Studentization
-
-(mean(X)-mean(Y))/sqrt(var(X)/10 + var(Y)/100)
-## [1] 1.704092
 
 coef(BTinference.perm)/confint(BTinference.perm, transformation = FALSE)$se
 ## [1] -2.165769
@@ -246,6 +260,36 @@ confint(BTinference.perm10000, transformation = FALSE)
 ## ** 1.4.4 Empirical performance
 allResS.tempo <- readRDS("results/aggregated-power.rds")
 allResS.tempoW <- readRDS("results/aggregated-mismatch.rds")
+
+## *** categorical vs continuous
+res.continuousH0 <- allResS.tempo[outcome=="continuous" & mu == 0,]
+res.categoricalH0 <- allResS.tempo[outcome=="categorical" & mu == 0,]
+100*range(res.continuousH0$coverage-res.categoricalH0$coverage, na.rm = TRUE)
+## [1] -0.1880075  0.8863975
+100*range(res.continuousH0[n==200,coverage]-res.categoricalH0[n==200,coverage], na.rm = TRUE)
+## [1] -0.084  0.188
+
+res.continuousH1 <- allResS.tempo[outcome=="continuous" & mu == 1,]
+res.categoricalH1 <- allResS.tempo[outcome=="categorical" & mu == 1,]
+100*range(res.continuousH1$coverage-res.categoricalH1$coverage, na.rm = TRUE)
+## [1] -0.368000  1.731282
+100*range(res.continuousH1[n==200,coverage]-res.categoricalH1[n==200,coverage], na.rm = TRUE)
+## [1] 0.208 1.432
+
+## *** Win ratio vs Net Treatment Benefit
+res.NTBH0 <- allResS.tempo[statistic=="netBenefit" & mu == 0,]
+res.WRH0 <- allResS.tempo[statistic=="winRatio" & mu == 0,]
+100*range(res.NTBH0$coverage-res.WRH0$coverage, na.rm = TRUE)
+## [1] -0.1400000  0.9283707
+100*range(res.NTBH0[n==200,coverage]-res.WRH0[n==200,coverage], na.rm = TRUE)
+## [1] -0.140  0.084
+
+res.NTBH1 <- allResS.tempo[statistic=="netBenefit" & mu == 1,]
+res.WRH1 <- allResS.tempo[statistic=="winRatio" & mu == 1,]
+100*range(res.NTBH1$coverage-res.WRH1$coverage, na.rm = TRUE)
+## [1] -0.6244324  1.3040000
+100*range(res.NTBH1[n==200,coverage]-res.WRH1[n==200,coverage], na.rm = TRUE)
+## [1] -0.208  1.016
 
 ## *** type 1 error
 allResS.tempo[statistic == "netBenefit" & n == 200 & mu==0 & method.legend == "Permutation",.(n, rep, "type 1 error" = 100*power)]
