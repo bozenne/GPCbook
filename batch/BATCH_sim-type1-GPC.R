@@ -11,8 +11,8 @@ gc()
 ## * seed
 iter_sim <- as.numeric(Sys.getenv("SLURM_ARRAY_TASK_ID"))
 n.iter_sim <- as.numeric(Sys.getenv("SLURM_ARRAY_TASK_COUNT"))
-if(is.na(iter_sim)){iter_sim <- 1}
-if(is.na(n.iter_sim)){n.iter_sim <- 10}
+if(is.na(iter_sim)){iter_sim <- 241}
+if(is.na(n.iter_sim)){n.iter_sim <- 1000}
 cat("iteration ",iter_sim," over ",n.iter_sim,"\n",sep="")
 
 set.seed(1)
@@ -42,52 +42,78 @@ if(dir.exists(path.output)==FALSE){
 
 ## * libraries
 library(BuyseTest)
+BuyseTest.options(order.Hprojection = 2)
 warper <- function(i, n, mu, sigma, n.resampling){
     if(length(n)==1){
         n <- rep(n,2)
     }
 
-    data <- simBuyseTest(n.T = n[1], n.C = n[2], argsCont = list(mu.C = 0, mu.T = mu, sigma.C = 1, sigma.T = sigma))
-    tps.U <- system.time(
-        BT.U <- BuyseTest(treatment ~ cont(score), data = data, trace = FALSE,
-                          method.inference = "u-statistic")
+    data <- simBuyseTest(n.T = n[1], n.C = n[2],
+                         argsCont = list(mu.C = 0, mu.T = mu, sigma.C = 1, sigma.T = sigma))
+    data$category <- as.numeric(cut(data$score, breaks = c(-Inf,-3,-2,-1,-0,1,2,3,Inf)))
+
+    ## continuous
+    tps.CU <- system.time(
+        BT.CU <- BuyseTest(treatment ~ cont(score), data = data, trace = FALSE,
+                           method.inference = "u-statistic", add.halfNeutral = TRUE)
     )
-    tps.boot <- system.time(
-        BT.boot <- BuyseTest(treatment ~ cont(score), data = data, n.resampling = n.resampling[1], trace = FALSE,
-                             method.inference = "studentized bootstrap", strata.resampling = "treatment")
+    tps.Cboot <- system.time(
+        BT.Cboot <- BuyseTest(treatment ~ cont(score), data = data, n.resampling = n.resampling[1], trace = FALSE,
+                              method.inference = "studentized bootstrap", strata.resampling = "treatment", add.halfNeutral = TRUE)
     )
-    tps.perm <- system.time(
-        BT.perm <- BuyseTest(treatment ~ cont(score), data = data, n.resampling = n.resampling[1], trace = FALSE,
-                             method.inference = "studentized permutation")
+    tps.Cperm <- system.time(
+        BT.Cperm <- BuyseTest(treatment ~ cont(score), data = data, n.resampling = n.resampling[1], trace = FALSE,
+                              method.inference = "studentized permutation", add.halfNeutral = TRUE)
     )
   
-    out <- rbind(
-        cbind(method = "Ustat", statistic = "netBenefit", confint(BT.U, statistic = "netBenefit", transform = FALSE), time = tps.U["elapsed"]),
-        cbind(method = "Ustat-trans", statistic = "netBenefit", confint(BT.U, statistic = "netBenefit", transform = TRUE), time = tps.U["elapsed"]),
-        cbind(method = "perm-perc", statistic = "netBenefit", confint(BT.perm, statistic = "netBenefit", method.ci.resampling = "percentile"), time = NA),
-        cbind(method = "perm-stud", statistic = "netBenefit", confint(BT.perm, statistic = "netBenefit", method.ci.resampling = "studentized"), time = tps.boot["elapsed"]),
-        cbind(method = "boot-perc", statistic = "netBenefit", confint(BT.boot, statistic = "netBenefit", method.ci.resampling = "percentile"), time = NA),
-        cbind(method = "boot-stud", statistic = "netBenefit", confint(BT.boot, statistic = "netBenefit", method.ci.resampling = "studentized"), time = tps.perm["elapsed"]),
-        cbind(method = "Ustat", statistic = "winRatio", confint(BT.U, statistic = "winRatio", transform = FALSE), time = tps.U["sys.self"]),
-        cbind(method = "Ustat-trans", statistic = "winRatio", confint(BT.U, statistic = "winRatio", transform = TRUE), time = tps.U["sys.self"]),
-        cbind(method = "perm-perc", statistic = "winRatio", confint(BT.perm, statistic = "winRatio", method.ci.resampling = "percentile"), time = NA),
-        cbind(method = "perm-stud", statistic = "winRatio", confint(BT.perm, statistic = "winRatio", method.ci.resampling = "studentized"), time = tps.boot["elapsed"]),
-        cbind(method = "boot-perc", statistic = "winRatio", confint(BT.boot, statistic = "winRatio", method.ci.resampling = "percentile"), time = NA),
-        cbind(method = "boot-stud", statistic = "winRatio", confint(BT.boot, statistic = "winRatio", method.ci.resampling = "studentized"), time = tps.perm["elapsed"])
+    ## categorical
+    tps.FU <- system.time(
+        BT.FU <- BuyseTest(treatment ~ cont(category), data = data, trace = FALSE,
+                           method.inference = "u-statistic", add.halfNeutral = TRUE)
+    )
+    tps.Fboot <- system.time(
+        BT.Fboot <- BuyseTest(treatment ~ cont(category), data = data, n.resampling = n.resampling[1], trace = FALSE,
+                              method.inference = "studentized bootstrap", strata.resampling = "treatment", add.halfNeutral = TRUE)
+    )
+    tps.Fperm <- system.time(
+        BT.Fperm <- BuyseTest(treatment ~ cont(category), data = data, n.resampling = n.resampling[1], trace = FALSE,
+                              method.inference = "studentized permutation", add.halfNeutral = TRUE)
     )
 
-    ## if(length(n.resampling)==2 && n.resampling[2]<n.resampling[1]){
-    ##     BT.boot0 <- BT.boot
-    ##     BT.boot0@DeltaResampling <- BT.boot@DeltaResampling[1:n.resampling[2],,,drop=FALSE]
-    ##     BT.boot0@covarianceResampling <- BT.boot@covarianceResampling[1:n.resampling[2],,,drop=FALSE]
-    ##     BT.boot0@weightStrataResampling <- BT.boot@weightStrataResampling[1:n.resampling[2],,drop=FALSE]
-    ##     BT.boot0@n.resampling <- n.resampling[2]
-    ##     out <- rbind(
-    ##         out,
-    ##         cbind(method = "boot-perc0", statistic = "netBenefit", confint(BT.boot0, statistic = "netBenefit", method.ci.resampling = "percentile"), time = NA),
-    ##         cbind(method = "boot-stud0", statistic = "netBenefit", confint(BT.boot0, statistic = "netBenefit", method.ci.resampling = "studentized"), time = NA)
-    ##     )
-    ## }
+    out <- rbind(
+        ## Net benefit (continuous outcome)
+        cbind(outcome = "continuous", method = "Ustat", statistic = "netBenefit", confint(BT.CU, statistic = "netBenefit", transform = FALSE), time = tps.CU["elapsed"]),
+        cbind(outcome = "continuous", method = "Ustat-trans", statistic = "netBenefit", confint(BT.CU, statistic = "netBenefit", transform = TRUE), time = tps.CU["elapsed"]),
+        cbind(outcome = "continuous", method = "perm-perc", statistic = "netBenefit", confint(BT.Cperm, statistic = "netBenefit", method.ci.resampling = "percentile"), time = NA),
+        cbind(outcome = "continuous", method = "perm-stud", statistic = "netBenefit", confint(BT.Cperm, statistic = "netBenefit", method.ci.resampling = "studentized"), time = tps.Cboot["elapsed"]),
+        cbind(outcome = "continuous", method = "boot-perc", statistic = "netBenefit", confint(BT.Cboot, statistic = "netBenefit", method.ci.resampling = "percentile"), time = NA),
+        cbind(outcome = "continuous", method = "boot-basic", statistic = "netBenefit", confint(BT.Cboot, statistic = "netBenefit", method.ci.resampling = "gaussian"), time = NA),
+        cbind(outcome = "continuous", method = "boot-stud", statistic = "netBenefit", confint(BT.Cboot, statistic = "netBenefit", method.ci.resampling = "studentized"), time = tps.Cperm["elapsed"]),
+        ## Win ratio (continuous outcome)
+        cbind(outcome = "continuous", method = "Ustat", statistic = "winRatio", confint(BT.CU, statistic = "winRatio", transform = FALSE), time = tps.CU["sys.self"]),
+        cbind(outcome = "continuous", method = "Ustat-trans", statistic = "winRatio", confint(BT.CU, statistic = "winRatio", transform = TRUE), time = tps.CU["sys.self"]),
+        cbind(outcome = "continuous", method = "perm-perc", statistic = "winRatio", confint(BT.Cperm, statistic = "winRatio", method.ci.resampling = "percentile"), time = NA),
+        cbind(outcome = "continuous", method = "perm-stud", statistic = "winRatio", confint(BT.Cperm, statistic = "winRatio", method.ci.resampling = "studentized"), time = tps.Cboot["elapsed"]),
+        cbind(outcome = "continuous", method = "boot-perc", statistic = "winRatio", confint(BT.Cboot, statistic = "winRatio", method.ci.resampling = "percentile"), time = NA),
+        cbind(outcome = "continuous", method = "boot-basic", statistic = "winRatio", confint(BT.Cboot, statistic = "winRatio", method.ci.resampling = "gaussian"), time = NA),
+        cbind(outcome = "continuous", method = "boot-stud", statistic = "winRatio", confint(BT.Cboot, statistic = "winRatio", method.ci.resampling = "studentized"), time = tps.Cperm["elapsed"]),
+        ## Net benefit (categorical outcome)
+        cbind(outcome = "categorical", method = "Ustat", statistic = "netBenefit", confint(BT.FU, statistic = "netBenefit", transform = FALSE), time = tps.FU["elapsed"]),
+        cbind(outcome = "categorical", method = "Ustat-trans", statistic = "netBenefit", confint(BT.FU, statistic = "netBenefit", transform = TRUE), time = tps.FU["elapsed"]),
+        cbind(outcome = "categorical", method = "perm-perc", statistic = "netBenefit", confint(BT.Fperm, statistic = "netBenefit", method.ci.resampling = "percentile"), time = NA),
+        cbind(outcome = "categorical", method = "perm-stud", statistic = "netBenefit", confint(BT.Fperm, statistic = "netBenefit", method.ci.resampling = "studentized"), time = tps.Fboot["elapsed"]),
+        cbind(outcome = "categorical", method = "boot-perc", statistic = "netBenefit", confint(BT.Fboot, statistic = "netBenefit", method.ci.resampling = "percentile"), time = NA),
+        cbind(outcome = "categorical", method = "boot-basic", statistic = "netBenefit", confint(BT.Fboot, statistic = "netBenefit", method.ci.resampling = "gaussian"), time = NA),
+        cbind(outcome = "categorical", method = "boot-stud", statistic = "netBenefit", confint(BT.Fboot, statistic = "netBenefit", method.ci.resampling = "studentized"), time = tps.Fperm["elapsed"]),
+        ## Win ratio (categorical outcome)
+        cbind(outcome = "categorical", method = "Ustat", statistic = "winRatio", confint(BT.FU, statistic = "winRatio", transform = FALSE), time = tps.FU["sys.self"]),
+        cbind(outcome = "categorical", method = "Ustat-trans", statistic = "winRatio", confint(BT.FU, statistic = "winRatio", transform = TRUE), time = tps.FU["sys.self"]),
+        cbind(outcome = "categorical", method = "perm-perc", statistic = "winRatio", confint(BT.Fperm, statistic = "winRatio", method.ci.resampling = "percentile"), time = NA),
+        cbind(outcome = "categorical", method = "perm-stud", statistic = "winRatio", confint(BT.Fperm, statistic = "winRatio", method.ci.resampling = "studentized"), time = tps.Fboot["elapsed"]),
+        cbind(outcome = "categorical", method = "boot-perc", statistic = "winRatio", confint(BT.Fboot, statistic = "winRatio", method.ci.resampling = "percentile"), time = NA),
+        cbind(outcome = "categorical", method = "boot-basic", statistic = "winRatio", confint(BT.Fboot, statistic = "winRatio", method.ci.resampling = "gaussian"), time = NA),
+        cbind(outcome = "categorical", method = "boot-stud", statistic = "winRatio", confint(BT.Fboot, statistic = "winRatio", method.ci.resampling = "studentized"), time = tps.Fperm["elapsed"])
+    )
 
     return(cbind(i = i, m = n[1], n = n[2], mu = mu, sigma  = sigma, out))
 }
@@ -106,7 +132,7 @@ grid.sim <- expand.grid(n = c(10,20,35,50,75,100,150,200),
 res <- NULL
 for(iSim in 1:rep.sim){ ## iSim <- 1
     cat(iSim," ")
-    for(iGrid in 1:NROW(grid.sim)){ ## iGrid <- 1
+    for(iGrid in 1:NROW(grid.sim)){ ## iGrid <- 2
         iRes <- try(warper(iSim,
                            n = c(grid.sim[iGrid,"n"],grid.sim[iGrid,"rho"]*grid.sim[iGrid,"n"]),
                            mu = grid.sim[iGrid,"mu"],

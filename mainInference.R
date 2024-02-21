@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: Oct  9 2023 (10:12) 
 ## Version: 
-## Last-Updated: feb  9 2024 (16:08) 
+## Last-Updated: feb 17 2024 (15:30) 
 ##           By: Brice Ozenne
-##     Update #: 117
+##     Update #: 157
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -33,6 +33,7 @@ dtInference[, score := round(score,1)]
 ## table 1 --> see tableInference-1.R
 
 ## ** 1.3.2 First order H-decomposition
+BuyseTest.options(order.Hprojection = 1)
 BTinference.H1 <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE)
 
 #### Example (table 1.1)
@@ -72,7 +73,81 @@ confint(BTinference.H2, statistic = "netBenefit", order.Hprojection = 2)
 ##       estimate        se   lower.ci   upper.ci null    p.value
 ## score    -0.48 0.2278245 -0.8016426 0.05716099    0 0.07728498
 
-BuyseTest.options(order.Hprojection = 1)
+
+## ** Demonstration: second order term is 0 for the net treatment benefit relative to single binary outcome
+dtInference$toxicity <- relevel(dtInference$toxicity,"no")
+
+BuyseTest.options(order.Hprojection = 2)
+test.Ustat <- BuyseTest(treatment ~ bin(toxicity), data = dtInference, trace = FALSE)
+
+pTable <- prop.table(table(dtInference$toxicity,dtInference$treatment), margin = 2)
+Pw <- pTable["yes","T"]*pTable["no","C"]
+Pl <- pTable["yes","C"]*pTable["no","T"]
+Pn <- pTable["yes","C"]*pTable["yes","T"] + pTable["no","C"]*pTable["no","T"]
+
+Pw - Pl
+confint(test.Ustat, order.Hprojection = 1)$estimate
+(Pl*(1-Pl) + Pw*(1-Pw) + 2 * Pw * Pl)/n.data
+confint(test.Ustat, order.Hprojection = 1)$se^2
+crossprod(getIid(test.Ustat))
+
+
+table(getIid(test.Ustat)[dtInference$treatment=="T"])
+pTable["no","C"] - (Pw - Pl)
+- pTable["yes","C"] - (Pw - Pl)
+
+table(getIid(test.Ustat)[dtInference$treatment=="C"])
+pTable["yes","T"] - (Pw - Pl)
+- pTable["no","T"] - (Pw - Pl)
+
+
+crossprod(getIid(test.Ustat)[dtInference$treatment=="T"])
+pTable["yes","T"]*(pTable["no","C"] - (Pw - Pl))^2 + pTable["no","T"] * (pTable["yes","C"] + (Pw - Pl))^2
+pTable["yes","T"]*(pTable["no","C"]^2 - 2*(Pw - Pl)*pTable["no","C"] + (Pw - Pl)^2) + pTable["no","T"]*(pTable["yes","C"]^2 + 2*(Pw - Pl)*pTable["yes","C"] + (Pw - Pl)^2)
+pTable["yes","T"]*(pTable["no","C"]^2 - 2*(Pw - Pl)*pTable["no","C"]) + pTable["no","T"]*(pTable["yes","C"]^2 + 2*(Pw - Pl)*pTable["yes","C"])+ (Pw - Pl)^2
+pTable["yes","T"]*(pTable["no","C"]^2 - 2*(Pw - Pl)*pTable["no","C"]) + pTable["no","T"]*(pTable["yes","C"]^2 + 2*(Pw - Pl)*pTable["yes","C"])+ (Pw - Pl)^2
+
+crossprod(getIid(test.Ustat)[dtInference$treatment=="C"])
+pTable["no","C"]*(pTable["yes","T"] - (Pw - Pl))^2 + pTable["yes","C"] * (pTable["no","T"] + (Pw - Pl))^2
+pTable["no","C"]*(pTable["yes","T"]^2 - 2*(Pw - Pl)*pTable["yes","T"]) + pTable["yes","C"]*(pTable["no","T"]^2 + 2*(Pw - Pl)*pTable["no","T"])+ (Pw - Pl)^2
+
+
+crossprod(getIid(test.Ustat))
+pTable["yes","T"]*(pTable["no","C"]^2 - 2*(Pw - Pl)*pTable["no","C"]) + pTable["no","T"]*(pTable["yes","C"]^2 + 2*(Pw - Pl)*pTable["yes","C"])+ (Pw - Pl)^2 + pTable["no","C"]*(pTable["yes","T"]^2 - 2*(Pw - Pl)*pTable["yes","T"]) + pTable["yes","C"]*(pTable["no","T"]^2 + 2*(Pw - Pl)*pTable["no","T"])+ (Pw - Pl)^2
+pTable["yes","T"]*(pTable["no","C"]^2 - 2*(Pw - Pl)*pTable["no","C"]) + pTable["no","T"]*(pTable["yes","C"]^2 + 2*(Pw - Pl)*pTable["yes","C"]) + pTable["no","C"]*(pTable["yes","T"]^2 - 2*(Pw - Pl)*pTable["yes","T"]) + pTable["yes","C"]*(pTable["no","T"]^2 + 2*(Pw - Pl)*pTable["no","T"])+ 2*(Pw - Pl)^2
+
+a <- pTable["yes","T"]*pTable["no","C"]^2 + pTable["no","T"]*pTable["yes","C"]^2 + pTable["no","C"]*pTable["yes","T"]^2 + pTable["yes","C"]*pTable["no","T"]^2
+a <- pTable["yes","T"]*pTable["no","C"]*(pTable["yes","T"]+pTable["no","C"]) + pTable["no","T"]*pTable["yes","C"]*(pTable["no","T"]+pTable["yes","C"])
+a <- Pw*(pTable["yes","T"]+pTable["no","C"]) + Pl*(pTable["no","T"]+pTable["yes","C"])
+aa <- pTable["yes","T"]+pTable["no","C"]
+aa <- pTable["yes","T"]*(pTable["no","C"]+pTable["yes","C"])+pTable["no","C"]*(pTable["no","T"]+pTable["yes","T"])
+aa <- pTable["yes","T"]*pTable["no","C"]+pTable["yes","T"]*pTable["yes","C"]+pTable["no","C"]*pTable["no","T"]+pTable["no","C"]*pTable["yes","T"]
+aa <- Pw+Pn+Pw
+bb <- pTable["no","T"]+pTable["yes","C"]
+bb <- pTable["no","T"]*(pTable["yes","C"]+pTable["no","C"])+pTable["yes","C"]*(pTable["yes","T"]+pTable["no","T"])
+bb <- pTable["no","T"]*pTable["yes","C"]+pTable["no","T"]*pTable["no","C"]+pTable["yes","C"]*pTable["yes","T"]+pTable["yes","C"]*pTable["no","T"]
+bb <- Pl+Pn+Pl
+a <- Pw * (Pn + 2*Pw) + Pl * (Pn + 2*Pl) 
+
+b <- 2*(Pw - Pl) * (- pTable["yes","T"]*pTable["no","C"] + pTable["no","T"]*pTable["yes","C"] - pTable["no","C"]*pTable["yes","T"]+ pTable["yes","C"]*pTable["no","T"])
+b <- 2*(Pw - Pl) * (- (Pw - Pl) - (Pw - Pl))
+b <- -4*(Pw - Pl)^2
+
+c <- 2*(Pw - Pl)^2
+a+b+c
+
+Pw * (Pn + 2*Pw) + Pl * (Pn + 2*Pl) - 4*(Pw - Pl)^2 + 2*(Pw - Pl)^2
+Pw * (Pn + 2*Pw) + Pl * (Pn + 2*Pl) - 2*(Pw - Pl)^2
+Pw*Pn + 2*Pw^2 + Pl*Pn + 2*Pl^2 - 2*Pw^2 - 2*Pl^2 + 4*Pw*Pl
+Pw*Pn + Pl*Pn + 4*Pw*Pl
+Pw*(1-Pw-Pl) + Pl*(1-Pw-Pl) + 4*Pw*Pl
+Pw*(1-Pw) + Pl*(1-Pl) + 2*Pw*Pl
+
+## does not generalize to more outcomes
+dtInference$score.bin <- dtInference$score>0
+test.Ustat2 <- BuyseTest(treatment ~ bin(toxicity)+bin(score.bin), data = dtInference, trace = FALSE)
+confint(test.Ustat2, order.Hprojection = 1)
+confint(test.Ustat2, order.Hprojection = 2)
 
 ## * 1.4 Comparison of inferential methods
 ## ** 1.4.1 Confidence intervals and p-values based on asymptotic approximation
@@ -232,36 +307,104 @@ BTinference.perm <- BuyseTest(treatment ~ cont(score), data = dtInference, trace
 confint(BTinference.perm, method = "percentile")
 ##       estimate        se lower.ci upper.ci null    p.value
 ## score    -0.48 0.2623938       NA       NA    0 0.06869313
-confint(BTinference.perm, method = "studentized")
+(1+sum(abs(BTinference.perm@DeltaResampling[,,"netBenefit"])>=abs(coef(BTinference.perm))))/10001
+
+confint(BTinference.perm, method = "studentized", transformation = FALSE)
+##       estimate        se lower.ci upper.ci null    p.value
+## score    -0.48 0.2216303       NA       NA    0 0.06069393
+eNTB.perm <- BTinference.perm@DeltaResampling[,,"netBenefit"]
+eNTBse.perm <- BTinference.perm@covarianceResampling[,,"netBenefit"]
+
+tNBT <- coef(BTinference.perm)/sqrt(BTinference.perm@covariance[,"netBenefit"])
+tNBT
+## [1] -2.165769
+tNBT.perm <- eNTB.perm/sqrt(eNTBse.perm)
+(1+sum(abs(tNBT.perm)>=abs(tNBT), na.rm = TRUE))/(1+sum(!is.na(tNBT.perm)))
+## [1] 0.06069393
+
+confint(BTinference.perm, method = "studentized", transformation = TRUE)
 ##       estimate        se lower.ci upper.ci null    p.value
 ## score    -0.48 0.2216303       NA       NA    0 0.05819418
+tNBT.t <- atanh(coef(BTinference.perm))/sqrt(BTinference.perm@covariance[,"netBenefit"]/(1-coef(BTinference.perm)^2)^2)
+tNBT.tperm <- atanh(eNTB.perm)/sqrt(eNTBse.perm/(1-eNTB.perm^2)^2)
+tNBT.tperm[is.infinite(atanh(eNTB.perm))] <- atanh(eNTB.perm)[is.infinite(atanh(eNTB.perm))]
+
+(1+sum(abs(tNBT.tperm)>=abs(tNBT.t), na.rm = TRUE))/(1+sum(!is.na(tNBT.tperm)))
+## [1] 0.05819418
 
 var(BTinference.perm@DeltaResampling[,"score","netBenefit"])
 ## [1] 0.0688505
 var(BTinference.boot@DeltaResampling[,"score","netBenefit"])
 ## [1] 0.0514759
 
-
-
-coef(BTinference.perm)/confint(BTinference.perm, transformation = FALSE)$se
-## [1] -2.165769
-
-range(BTinference.perm@DeltaResampling[,"score","netBenefit"]/sqrt(BTinference.perm@covarianceResampling[,"score","netBenefit"]))
-## [1] -1.220683  2.573011
-
-sort(abs(BTinference.perm@DeltaResampling[,"score","netBenefit"]/sqrt(BTinference.perm@covarianceResampling[,"score","netBenefit"])))[14:15]
-##       15       14 
-## 1.220683 2.573011 
-
-confint(BTinference.perm10000, transformation = FALSE)
-##       estimate        se lower.ci upper.ci null    p.value
-## score    -0.48 0.2216303       NA       NA    0 0.06069393
-
 ## ** 1.4.4 Empirical performance
 allResS.tempo <- readRDS("results/aggregated-power.rds")
 allResS.tempoW <- readRDS("results/aggregated-mismatch.rds")
 
-## *** categorical vs continuous
+## *** bias
+bias <- dcast(data = allResS.tempo[method == "Ustat2",.(statistic,outcome,truth,n,bias)],
+                 statistic+outcome+truth~n)
+print(bias, digits = 3)
+## ##     statistic     outcome truth        10       20        35        50        75       100       150       200
+##     statistic     outcome truth        10       20        35        50        75       100       150       200
+## 1: netBenefit categorical 0.000 -0.000332 -0.00128 -0.000178 -0.000374 -0.000493  0.000384 -0.000343  8.90e-05
+## 2: netBenefit categorical 0.335  0.000704  0.00225 -0.001575  0.000270 -0.000519 -0.000696  0.000250 -7.13e-05
+## 3: netBenefit  continuous 0.000 -0.000861 -0.00114 -0.000176 -0.000390 -0.000634  0.000461 -0.000406 -6.53e-05
+## 4: netBenefit  continuous 0.345  0.000583  0.00245 -0.001613  0.000466 -0.000636 -0.000596  0.000243 -4.04e-05
+## 5:   winRatio categorical 1.000       Inf  0.11445  0.062981  0.041285  0.026823  0.021741  0.012874  1.03e-02
+## 6:   winRatio categorical 2.323       Inf      Inf  0.216915  0.156079  0.094934  0.068538  0.049558  3.51e-02
+## 7:   winRatio  continuous 1.000       Inf  0.07929  0.044385  0.029053  0.018523  0.015631  0.008937  7.02e-03
+## 8:   winRatio  continuous 2.055       Inf  0.29192  0.131033  0.096799  0.057917  0.042707  0.031387  2.21e-02
+
+## allResS.tempo[method == "Ustat" & statistic == "netBenefit",max(abs(bias))]
+
+gg.bias <- ggplot(allResS.tempo[!is.infinite(bias) & method == "Ustat2"], aes(x=n,y=bias,group=mu,color=mu))
+gg.bias <- gg.bias + geom_line() + geom_point() + facet_grid(statistic~outcome, scales = "free")
+gg.bias <- gg.bias + geom_hline(yintercept = 0, color = "red")
+gg.bias
+
+## *** type 1 error
+type1.permC <- allResS.tempo[statistic == "netBenefit" & mu==0 & method.legend == "Permutation",
+                         .(outcome, n, rep, "type 1 error" = 100*power)]
+dcast(type1.permC, outcome+rep~n)
+##        outcome   rep    10    20    35    50    75   100   150   200
+## 1: categorical 25000 5.308 5.568 5.900 5.652 5.860 5.764 5.724 5.712
+## 2:  continuous 25000 5.172 5.448 6.024 5.692 5.844 5.736 5.828 5.684
+
+(0.7/100)/sqrt(0.05*0.95/25000)
+## [1] 5.078334
+
+allResS.tempo[statistic == "netBenefit" & n==10 & mu==0 & method.legend == "Asymptotic",
+              .(outcome, n, rep, "type 1 error" = 100*power)]
+##        outcome  n   rep type 1 error
+## 1:  continuous 10 25000        8.340
+## 2: categorical 10 25000        8.496
+
+allResS.tempo[statistic == "netBenefit" & n == 10 & mu==0 & method.legend == "Percentile bootstrap",
+              .(outcome, n, rep, "type 1 error" = 100*power)]
+##        outcome  n   rep type 1 error
+## 1:  continuous 10 25000         6.44
+## 2: categorical 10 25000         6.82
+
+allResS.tempo[statistic == "netBenefit" & n == 10 & mu==0 & method.legend == "Asymptotic with transformation",
+              .(outcome, n, rep, "type 1 error" = 100*power)]
+##        outcome  n   rep type 1 error
+## 1:  continuous 10 25000        3.512
+## 2: categorical 10 25000        4.028
+
+allResS.tempo[statistic == "netBenefit" & n == 10 & mu==0 & method.legend == "Basic bootstrap",
+              .(outcome, n, rep, "type 1 error" = 100*power)]
+##        outcome  n   rep type 1 error
+## 1:  continuous 10 25000        0.496
+## 2: categorical 10 25000        1.152
+
+allResS.tempo[statistic == "netBenefit" & n == 10 & mu==0 & method.legend == "Studentized bootstrap",
+              .(outcome, n, rep, "type 1 error" = 100*power)]
+##        outcome  n   rep type 1 error
+## 1:  continuous 10 25000        3.644
+## 2: categorical 10 25000        4.180
+
+## **** categorical vs continuous
 res.continuousH0 <- allResS.tempo[outcome=="continuous" & mu == 0,]
 res.categoricalH0 <- allResS.tempo[outcome=="categorical" & mu == 0,]
 100*range(res.continuousH0$coverage-res.categoricalH0$coverage, na.rm = TRUE)
@@ -276,95 +419,88 @@ res.categoricalH1 <- allResS.tempo[outcome=="categorical" & mu == 1,]
 100*range(res.continuousH1[n==200,coverage]-res.categoricalH1[n==200,coverage], na.rm = TRUE)
 ## [1] 0.208 1.432
 
-## *** Win ratio vs Net Treatment Benefit
+## **** Win ratio vs Net Treatment Benefit
+
 res.NTBH0 <- allResS.tempo[statistic=="netBenefit" & mu == 0,]
 res.WRH0 <- allResS.tempo[statistic=="winRatio" & mu == 0,]
-100*range(res.NTBH0$coverage-res.WRH0$coverage, na.rm = TRUE)
-## [1] -0.1400000  0.9283707
+100*range(res.NTBH0$power-res.WRH0$power, na.rm = TRUE)
+## [1] -1.520  1.216
 100*range(res.NTBH0[n==200,coverage]-res.WRH0[n==200,coverage], na.rm = TRUE)
 ## [1] -0.140  0.084
 
 res.NTBH1 <- allResS.tempo[statistic=="netBenefit" & mu == 1,]
 res.WRH1 <- allResS.tempo[statistic=="winRatio" & mu == 1,]
 100*range(res.NTBH1$coverage-res.WRH1$coverage, na.rm = TRUE)
-## [1] -0.6244324  1.3040000
+## [1] -1.282002 31.168176
 100*range(res.NTBH1[n==200,coverage]-res.WRH1[n==200,coverage], na.rm = TRUE)
 ## [1] -0.208  1.016
 
-## *** type 1 error
-allResS.tempo[statistic == "netBenefit" & n == 200 & mu==0 & method.legend == "Permutation",.(n, rep, "type 1 error" = 100*power)]
-##      n   rep type 1 error
-## 8: 200 25000        5.836
-
-(0.8/100)/sqrt(0.05*0.95/25000)
-## [1] 5.80381
-
-allResS.tempo[statistic == "netBenefit" & n==10 & mu==0 & method.legend == "Asymptotic",.(n, rep, "type 1 error" = 100*power)]
-##      n   rep type 1 error
-## 1:  10 25000        8.944
-
-allResS.tempo[statistic == "netBenefit" & n == 10 & mu==0 & method.legend == "Percentile bootstrap",.(n, rep, "type 1 error" = 100*power)]
-##      n   rep type 1 error
-## 1:  10 25000        6.536
-
-allResS.tempo[statistic == "netBenefit" & n == 10 & mu==0 & method.legend == "Asymptotic with transformation",.(n, rep, "type 1 error" = 100*power)]
-##      n   rep type 1 error
-## 1:  10 25000        4.140
-
 ## *** mismatch p-value / confidence interval
+
+allResS.tempo[mismatch>0,unique(method.legend)]
+## [1] Percentile bootstrap  Studentized bootstrap
+
 allResS.tempo[!is.na(mismatch) & mismatch >0 & statistic == "netBenefit" & method.legend == "Percentile bootstrap",
-              .(mu,n,mismatch = 100*mismatch)]
-##     mu   n mismatch
-##  1:  0  10    0.620
-##  2:  0  20    0.068
-##  3:  0  50    0.012
-##  4:  0 100    0.012
-##  5:  0 150    0.020
-##  6:  0 200    0.016
-##  7:  1  10    1.556
-##  8:  1  20    0.224
-##  9:  1  50    0.080
-## 10:  1 100    0.004
-allRes.tempo[method=="boot-perc" & n==10 & mismatch>0 & mu == 1 & statistic=="netBenefit",
-             unique(p.value)]
-## [1] 0.0467 0.0311
-allRes.tempo[method=="boot-perc" & n==10 & mismatch>0 & mu == 1 & statistic=="netBenefit",
-             .(table(lower.ci))]
-##    lower.ci   N
-## 1:     -0.9   2
-## 2:    -0.88   1
-## 3:        0 291a
+              .(mu,outcome,n,mismatch = 100*mismatch)][n==10,]
+##    mu     outcome  n  mismatch
+## 1:  0  continuous 10 0.5889895
+## 2:  0 categorical 10 0.2724577
+## 3:  1  continuous 10 1.5568718
+## 4:  1 categorical 10 0.6483631
+
+allResS.tempo[!is.na(mismatch) & mismatch >0 & statistic == "netBenefit" & method.legend == "Percentile bootstrap",
+              .(mu,n,mismatch = 100*mismatch)][n>10,max(mismatch)]
+## + [1] 0.192
+
 allResS.tempo[!is.na(mismatch) & mismatch >0 & statistic == "netBenefit" & method.legend == "Studentized bootstrap",
-              .(mu,n,mismatch = 100*mismatch)]
-##    mu   n mismatch
-## 1:  0  10    0.012
-## 2:  0  20    0.004
-## 3:  0  75    0.004
-## 4:  0 100    0.004
-## 5:  0 150    0.016
-## 6:  1  10    0.012
-## 7:  1  20    0.016
-## 8:  1  35    0.016
-## 9:  1  50    0.008
+              .(mu,n,mismatch = 100*mismatch)][,max(mismatch)]
+## + [1] 0.028
 
 
 ## *** mismatch net benefit / win ratio
-table.mismatch <- allResS.tempoW[mismatch>0]
+gg.mismatch <- ggplot(allResS.tempoW[method %in% c("Ustat1","Ustat1-trans")==FALSE], aes(x=n,y=100*mismatch,group=method,color=method, shape = method))
+gg.mismatch <- gg.mismatch + geom_line() + geom_point() + facet_grid(mu~outcome, scales = "free")
+gg.mismatch
 
-unique(table.mismatch$method)
-## [1] "Ustat"     "perm-perc" "perm-stud"
+allResS.tempoW[outcome=="continuous" & 100*mismatch>0.01, unique(method)]
+## [1] "Ustat1" "Ustat2"
+allResS.tempoW[outcome=="continuous" & method == "Ustat2" & mu ==0,setNames(100*mismatch, n)]
+##      10      20      35      50      75     100     150     200 
+## 9.32003 6.56400 6.06400 4.70400 4.22800 3.63600 3.23200 2.59600 
 
-table.mismatch[method == "Ustat" & n %in% c(10,50,200) & mu == 0]
-##      n mu sigma method   rep mismatch
-## 1:  10  0     2  Ustat 25000  0.09400
-## 2:  50  0     2  Ustat 25000  0.05164
-## 3: 200  0     2  Ustat 25000  0.02568
+allResS.tempoW[outcome=="categorical" & 100*mismatch>0.01, unique(method)]
+## [1] "Ustat1"       "Ustat1-trans" "Ustat2"       "Ustat2-trans" "boot-basic"   "boot-stud"    "perm-perc"   
+## [8] "perm-stud"   
+allResS.tempoW[outcome=="categorical" & method == "Ustat2" & mu ==0,setNames(100*mismatch, n)]
+##       10       20       35       50       75      100      150      200 
+## 10.50016  7.62400  6.79600  5.50800  4.93600  4.24400  3.58800  2.99600 
+allResS.tempoW[outcome=="categorical" & method == "Ustat2-trans" & mu ==0,setNames(100*mismatch, n)]
+##       10       20       35       50       75      100      150      200 
+## 1.202308 0.280000 0.140000 0.088000 0.080000 0.048000 0.032000 0.048000 
+allResS.tempoW[outcome=="categorical" & method == "boot-basic" & mu ==0,setNames(100*mismatch, n)]
+##        10        20        35        50        75       100       150       200 
+## 0.8857005 1.2160000 0.4440000 0.2320000 0.1360000 0.0920000 0.0600000 0.0520000 
+allResS.tempoW[outcome=="categorical" & method == "boot-stud" & mu ==0,setNames(100*mismatch, n)]
+##        10        20        35        50        75       100       150       200 
+## 1.7416546 0.2605042 0.1760211 0.1080000 0.0880000 0.0720000 0.0680000 0.0720000 
+allResS.tempoW[outcome=="categorical" & method == "perm-stud" & mu ==0,setNames(100*mismatch, n)]
+##        10        20        35        50        75       100       150       200 
+## 0.3714866 0.1320053 0.0720000 0.0360000 0.0280000 0.0240000 0.0240000 0.0360000 
 
-table.mismatch[method != "Ustat" & n %in% c(10,50,200) & mu == 0]
-##      n mu sigma    method   rep mismatch
-## 1:  50  0     2 perm-perc 25000    2e-04
-## 2: 200  0     2 perm-perc 25000    4e-05
-## 3:  10  0     2 perm-stud 25000    2e-04
+allResS.tempoW[outcome=="continuous" & method == "boot-perc" & mu ==0,setNames(100*mismatch, n)]
+ ## 10  20  35  50  75 100 150 200 
+ ##  0   0   0   0   0   0   0   0 
+allResS.tempoW[outcome=="categorical" & method == "boot-perc" & mu ==0,setNames(100*mismatch, n)]
+ ## 10  20  35  50  75 100 150 200 
+ ##  0   0   0   0   0   0   0   0 
+
+allResS.tempoW[outcome=="continuous" & method == "perm-perc" & mu ==0,setNames(100*mismatch, n)]
+ ## 10  20  35  50  75 100 150 200 
+ ##  0   0   0   0   0   0   0   0 
+allResS.tempoW[outcome=="categorical" & method == "perm-perc" & mu ==0,setNames(100*mismatch, n)]
+##       10       20       35       50       75      100      150      200 
+## 0.853639 0.540000 0.424000 0.484000 0.572000 0.492000 0.488000 0.448000 
+
 
 ## *** time
 dt.time <- dcast(allResS.tempo[,.(time=round(median(time),2)),by=c("method","n")],

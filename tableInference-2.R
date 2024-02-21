@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: Oct  9 2023 (10:38) 
 ## Version: 
-## Last-Updated: feb  9 2024 (15:42) 
+## Last-Updated: feb 15 2024 (10:50) 
 ##           By: Brice Ozenne
-##     Update #: 13
+##     Update #: 14
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -92,33 +92,31 @@ table3 <- rbind(asymptotic.no = data.frame(var = signif(table3.asymp$se^2,2),
                                        CI = "",
                                        p.value = signif(table3.tpermT$p.value,2))
                 )
-                
+table3$p.value <- as.character(table3$p.value)                 
                 
 
 
 ## * display table 3
 print(xtable(table3),include.rownames=FALSE)
 
-## % latex table generated in R 4.2.0 by xtable 1.8-4 package
-## % Fri Feb  9 15:32:52 2024
 ## \begin{table}[ht]
 ## \centering
-## \begin{tabular}{llr}
+## \begin{tabular}{lll}
 ##   \hline
 ## var & CI & p.value \\ 
 ##   \hline
 ## 0.049 & [-0.91; -0.046] & 0.03 \\ 
-##   0.083 & [-0.8; 0.041] & 0.07 \\ 
-##   0.051 & [-0.925; -0.035] & 0.03 \\ 
-##   0.12 & [-0.831; 0.144] & 0.12 \\ 
-##   0.051 & [-0.86; 0] & 0.05 \\ 
-##   (-3.46;1.74) & [-1.246; -0.094] & 0.02 \\ 
-##   (-1.83;1.9) & [-0.781; 0.023] & 0.06 \\ 
-##    &  & 0.07 \\ 
-##    &  & 0.06 \\ 
+##   0.083 & [-0.8; 0.041] & 0.069 \\ 
+##   0.051 & [-0.925; -0.035] & 0.034 \\ 
+##   0.116 & [-0.831; 0.144] & 0.125 \\ 
+##   0.051 & [-0.86; 0] & 0.054 \\ 
+##   (-3.46;1.74) & [-1.246; -0.094] & 0.019 \\ 
+##   (-1.83;1.9) & [-0.781; 0.023] & 0.062 \\ 
+##    &  & 0.069 \\ 
+##    &  & 0.061 \\ 
+##    &  & 0.058 \\ 
 ##    \hline
 ## \end{tabular}
 ## \end{table}
-
 ##----------------------------------------------------------------------
 ### tableInference-2.R ends here
