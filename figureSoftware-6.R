@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: okt  9 2023 (17:22) 
 ## Version: 
-## Last-Updated: okt  9 2023 (18:03) 
+## Last-Updated: okt  9 2023 (18:09) 
 ##           By: Brice Ozenne
-##     Update #: 7
+##     Update #: 10
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -45,38 +45,26 @@ dt.data <- simBuyseTest(n.T = 200, n.C = 200,
 ## * GPC
 dt.data$toxicity.num <- as.numeric(dt.data$toxicity)
 
-eNH.BT <- BuyseTest(treatment ~ cont(toxicity.num, operator = "<0") + tte(OS, statusOS),
-                    data=dt.data, hierarchical = FALSE, trace = FALSE)
 eRBB.BT <- BuyseTest(treatment ~ cont(toxicity.num, operator = "<0") + tte(OS, statusOS),
                      data=dt.data, trace = FALSE)
+eRBB.Se <- sensitivity(eRBB.BT, threshold = list(1:5,c(0,5,10)),
+                       band = TRUE, adj.p.value = TRUE, seed = 10, trace = FALSE)
 
-## * generate figure 5
-eRBB.plot <- plot(eRBB.BT)
-eNH.plot <- plot(eNH.BT)
+## * generate figure 7
+theme_set(theme_bw())
+figure6 <- autoplot(eRBB.Se) + facet_wrap(~OS, labeller = label_both)
+figure6 <- figure6 + scale_color_grey(start = 0.1, end = .6)
+figure6 <- figure6 + scale_fill_grey(start = 0.1, end = .6)
+figure6 <- figure6 + ylab("Net Treatment Benefit")
+figure6 <- figure6 + theme(text = element_text(size=20), 
+                           axis.line = element_line(linewidth = 1.25),
+                           axis.ticks = element_line(linewidth = 1.25),
+                           axis.ticks.length=unit(.25, "cm"),
+                           legend.key.size = unit(2,"line"))
 
-figure6.A <- plot(eRBB.BT)$plot + ggtitle("Hierarchical")
-figure6.A <- figure6.A + theme(text = element_text(size=20), 
-                               axis.line = element_line(linewidth = 1.25),
-                               axis.ticks = element_line(linewidth = 1.25),
-                               axis.ticks.length=unit(.25, "cm"),
-                               legend.key.size = unit(2,"line"))
-figure6.B <- plot(eNH.BT)$plot + ggtitle("Non-hierarchical")
-figure6.B <- figure6.B + theme(text = element_text(size=20), 
-                               axis.line = element_line(linewidth = 1.25),
-                               axis.ticks = element_line(linewidth = 1.25),
-                               axis.ticks.length=unit(.25, "cm"),
-                               legend.key.size = unit(2,"line"))
-
-
-
-figure6 <- ggpubr::ggarrange(figure6.A, figure6.B, common.legend = TRUE, legend = "bottom")
-                           
-
-
-pdf("figures/fig_software_hierarchical.pdf", width = 12, height = 8)
+pdf("figures/fig_software_sensitivity.pdf", width = 12, height = 8)
 figure6
 dev.off()
-
 
 ##----------------------------------------------------------------------
 ### figureSoftware-6.R ends here

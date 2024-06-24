@@ -1,11 +1,11 @@
-### figureSoftware-7.R --- 
+### figureSoftware-8.R --- 
 ##----------------------------------------------------------------------
 ## Author: Brice Ozenne
 ## Created: okt  9 2023 (17:22) 
 ## Version: 
-## Last-Updated: okt  9 2023 (18:09) 
+## Last-Updated: jun 13 2024 (11:05) 
 ##           By: Brice Ozenne
-##     Update #: 10
+##     Update #: 12
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -17,6 +17,7 @@
 
 library(BuyseTest)
 library(ggplot2)
+library(lava)
 
 ## * generate data
 argsSurv <- list(name = c("OS","PFS"),
@@ -50,18 +51,23 @@ eRBB.BT <- BuyseTest(treatment ~ cont(toxicity.num, operator = "<0") + tte(OS, s
 eRBB.Se <- sensitivity(eRBB.BT, threshold = list(1:5,c(0,5,10)),
                        band = TRUE, adj.p.value = TRUE, seed = 10, trace = FALSE)
 
-## * generate figure 7
-figure7 <- autoplot(eRBB.Se) + facet_wrap(~OS, labeller = label_both)
-figure7 <- figure7 + ylab("Net Treatment Benefit")
-figure7 <- figure7 + theme(text = element_text(size=20), 
-                           axis.line = element_line(linewidth = 1.25),
-                           axis.ticks = element_line(linewidth = 1.25),
-                           axis.ticks.length=unit(.25, "cm"),
-                           legend.key.size = unit(2,"line"))
+eRBB.Hdecomp <- iid(eRBB.Se)
+eRBB.cor <- cor(eRBB.Hdecomp)
 
-pdf("figures/fig_software_sensitivity.pdf", width = 12, height = 8)
-figure7
+## * generate figure 8
+
+rownames(eRBB.cor) <- paste0("tox=",eRBB.Se$toxicity.num,";OS=",eRBB.Se$OS,"")
+colnames(eRBB.cor) <- paste0("tox=",eRBB.Se$toxicity.num,";OS=",eRBB.Se$OS,"")
+
+colTab <- scales::seq_gradient_pal(low = rgb(0.9,0.9,0.9),
+                                   high = rgb(0.1,0.1,0.1))(seq(0,1,length.out = 30))
+
+pdf("figures/fig_software_corIID.pdf", width = 8, height = 8)
+par(mar  = c(6,6,2,2))
+fields::image.plot(eRBB.cor[rev(colnames(eRBB.cor)),colnames(eRBB.cor)], axes = FALSE, col = colTab)
+axis(1, at=seq(0,1,length.out=15), labels=rev(colnames(eRBB.cor)), las = 2)
+axis(2, at=seq(0,1,length.out=15), labels=colnames(eRBB.cor), las = 2)
 dev.off()
 
 ##----------------------------------------------------------------------
-### figureSoftware-7.R ends here
+### figureSoftware-8.R ends here

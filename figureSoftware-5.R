@@ -55,10 +55,14 @@ eBRB.BT <- BuyseTest(treatment ~ tte(OS, statusOS) + cont(toxicity.num, operator
                      data=dt.data, trace = FALSE)
 
 ## * generate figure 5
+theme_set(theme_bw())
+colorG2R <- scales::seq_gradient_pal(low = rgb(0.9,0.9,0.9),
+                                     high = rgb(0.1,0.1,0.1))
 
 
 label5.A <- c("OS\n(any difference)","Toxicity\n(any difference)")
 figure5.A <- plot(eBRB.BT, label.endpoint = label5.A)$plot + ggtitle("No threshold")
+figure5.A <- figure5.A + scale_fill_grey(start = 0.2, end = .9)
 figure5.A <- figure5.A + theme(text = element_text(size=20), 
                                axis.line = element_line(linewidth = 1.25),
                                axis.ticks = element_line(linewidth = 1.25),
@@ -67,6 +71,7 @@ figure5.A <- figure5.A + theme(text = element_text(size=20),
 
 label5.B <- c("OS\n(\U2265 28 days)","Toxicity\n(\U2265 2 grade)","OS\n(\U2265 14 days)","Toxicity\n(any difference)")
 figure5.B <- plot(eSH.BT, label.endpoint = label5.B)$plot + ggtitle("With threshold")
+figure5.B <- figure5.B + scale_fill_grey(start = 0.2, end = .9)
 figure5.B <- figure5.B + theme(text = element_text(size=20), 
                                axis.line = element_line(linewidth = 1.25),
                                axis.ticks = element_line(linewidth = 1.25),
@@ -76,6 +81,7 @@ figure5.B <- figure5.B + theme(text = element_text(size=20),
 
 figure5 <- ggpubr::ggarrange(figure5.A, figure5.B,
                              common.legend = TRUE, legend = "bottom", widths = c(1,1.5))
+
 pdf("figures/fig_software_hierarchical-threshold.pdf", width = 12, height = 8)
 figure5
 dev.off()

@@ -49,6 +49,7 @@ convertion <- function(txt){switch(txt,
 allResS.NTBc[mu==0 & n==10 & method == "boot-basic", 100*power]
 ## [1] 0.496
 
+theme_set(theme_bw())
 figure6.A1 <- ggplot(allResS.NTBc[mu==0],
                      aes(x = n, y = power, group = method.legend, shape = method.legend, linetype = method.legend))
 figure6.A1 <- figure6.A1 + geom_hline(yintercept = 0.05, linewidth = 1.5, color = "darkgrey")

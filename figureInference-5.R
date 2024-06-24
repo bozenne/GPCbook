@@ -56,6 +56,7 @@ dt.perm$type <- factor(dt.perm$type, levels = unique(dt.perm$type))
 dt.permQ$type <- factor(dt.permQ$type, levels = unique(dt.perm$type))
 
 ## ** generate figure
+theme_set(theme_bw())
 gg.histPerm <- ggplot()
 gg.histPerm <- gg.histPerm + geom_histogram(data = dt.perm, mapping = aes(x = estimate, y = after_stat(density)), color = "black")
 gg.histPerm <- gg.histPerm + geom_line(data = dt.perm, mapping = aes(x = estimate, y = density), color = "darkgrey", linewidth = 1.25)

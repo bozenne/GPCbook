@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: okt  9 2023 (14:57) 
 ## Version: 
-## Last-Updated: feb  9 2024 (15:11) 
+## Last-Updated: maj  7 2024 (10:44) 
 ##           By: Brice Ozenne
-##     Update #: 8
+##     Update #: 9
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -25,6 +25,7 @@ allResSL.tempo2[, variable.legend := factor(variable,
                                             levels = c("power","power.band","power.bonf"),
                                             labels = c("None","Dunnett","Bonferroni"))]
 
+theme_set(theme_bw())
 figure6 <- ggplot(allResSL.tempo2,aes(x = n, y = value))
 figure6 <- figure6 + geom_hline(data = data.frame(x =  unique(allResSL.tempo2$n), y = 0.05, mu.legend = paste0("\u0394\u03bc=",0)), aes(yintercept = y) ,color = "gray", linewidth = 1.5)
 figure6 <- figure6 + geom_line(aes(group = variable.legend, linetype = variable.legend), linewidth = 1.15) + geom_point(aes(group = variable, shape = variable.legend), size = 3)

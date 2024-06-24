@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: okt  9 2023 (15:51) 
 ## Version: 
-## Last-Updated: okt  9 2023 (15:54) 
+## Last-Updated: okt  9 2023 (18:03) 
 ##           By: Brice Ozenne
-##     Update #: 2
+##     Update #: 4
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -17,6 +17,8 @@
 
 library(ggpubr)
 library(ggplot2)
+library(prodlim)
+library(BuyseTest)
 
 ## * generate data
 argsSurv <- list(name = c("OS","PFS"),
@@ -42,25 +44,39 @@ dt.data <- simBuyseTest(n.T = 200, n.C = 200,
                         argsTTE = argsSurv,
                         level.strata = c("M","F"), names.strata = "gender")
 
-## * generate figure 3
-figure3.A <- ggplot(dt.data, aes(x = toxicity, y = OS, fill = treatment)) + geom_boxplot()
-figure3.A <- figure3.A + theme(text = element_text(size=20), 
-                               axis.line = element_line(linewidth = 1.25),
-                               axis.ticks = element_line(linewidth = 1.25),
-                               axis.ticks.length=unit(.25, "cm"),
-                               legend.key.size = unit(3,"line"))
-figure3.B <- ggplot(dt.data, aes(x = toxicity, y = PFS, fill = treatment)) + geom_boxplot()
-figure3.B <- figure3.B + theme(text = element_text(size=20), 
-                               axis.line = element_line(linewidth = 1.25),
-                               axis.ticks = element_line(linewidth = 1.25),
-                               axis.ticks.length=unit(.25, "cm"),
-                               legend.key.size = unit(3,"line"))
-figure3 <- ggarrange(figure3.A, figure3.B, nrow = 1, ncol = 2, common.legend = TRUE, legend = "bottom")
+## * generate figure 4
+dtPC.toxW <- prop.table(table(dt.data$treatment,
+                              dt.data$toxicity))
 
-graphics.off()
-pdf("figures/fig_software_OS-PFS-tox.pdf", width = 12, height = 8)
-figure3
+dtPC.toxL <- as.data.frame(dtPC.toxW, responseName = "Probability")
+names(dtPC.toxL)[1:2] <- c("treatment","grade")
+
+## ** Toxicity
+theme_set(theme_bw())
+colorG2R <- scales::seq_gradient_pal(low = rgb(0.9,0.9,0.9),
+                                     high = rgb(0.1,0.1,0.1))
+
+figure3.A <- ggplot(dtPC.toxL, aes(x = treatment, fill = grade, y = Probability))
+figure3.A <- figure3.A + geom_bar(position = position_fill(reverse = TRUE),
+                            stat = "identity")
+figure3.A <- figure3.A + scale_y_continuous(labels = scales::percent)
+figure3.A <- figure3.A + scale_fill_manual("Worse\nadverse event",
+                                     values = colorG2R(seq(0,1,length.out=6)))
+figure3.A 
+
+
+## ** assemble
+pdf("figures/fig_software_hist-tox.pdf", width = 5, height = 5)
+figure3.A + theme(text = element_text(size=15), 
+                       axis.line = element_line(linewidth = 1.25),
+                       axis.ticks = element_line(linewidth = 1.25),
+                       axis.ticks.length=unit(.25, "cm"),
+                       legend.key.size = unit(2,"line"))
 dev.off()
-
+pdf("figures/fig_software_KM-OS.pdf", width = 5, height = 5)
+par(mar = rep(1,4))
+plot(prodlim(Hist(OS,statusOS) ~ treatment, data = dt.data), col = c(rgb(0.1,0.1,0.1),rgb(0.7,0.7,0.7)),
+     lty = c(4,1))
+dev.off()
 ##----------------------------------------------------------------------
 ### figureSoftware-3.R ends here

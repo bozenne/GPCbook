@@ -1,11 +1,11 @@
-### figureSoftware-8.R --- 
+### figureSoftware-2.R --- 
 ##----------------------------------------------------------------------
 ## Author: Brice Ozenne
-## Created: okt  9 2023 (17:22) 
+## Created: okt  9 2023 (15:51) 
 ## Version: 
-## Last-Updated: okt  9 2023 (18:09) 
+## Last-Updated: okt  9 2023 (15:54) 
 ##           By: Brice Ozenne
-##     Update #: 11
+##     Update #: 2
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -15,9 +15,9 @@
 ## 
 ### Code:
 
-library(BuyseTest)
+library(ggpubr)
 library(ggplot2)
-library(lava)
+library(BuyseTest)
 
 ## * generate data
 argsSurv <- list(name = c("OS","PFS"),
@@ -43,29 +43,28 @@ dt.data <- simBuyseTest(n.T = 200, n.C = 200,
                         argsTTE = argsSurv,
                         level.strata = c("M","F"), names.strata = "gender")
 
-## * GPC
-dt.data$toxicity.num <- as.numeric(dt.data$toxicity)
+## * generate figure 3
+theme_set(theme_bw())
+figure2.A <- ggplot(dt.data, aes(x = toxicity, y = OS, fill = treatment)) + geom_boxplot()
+figure2.A <- figure2.A + scale_fill_grey(start = 0.4, end = .8)
+figure2.A <- figure2.A + theme(text = element_text(size=20), 
+                               axis.line = element_line(linewidth = 1.25),
+                               axis.ticks = element_line(linewidth = 1.25),
+                               axis.ticks.length=unit(.25, "cm"),
+                               legend.key.size = unit(3,"line"))
+figure2.B <- ggplot(dt.data, aes(x = toxicity, y = PFS, fill = treatment)) + geom_boxplot()
+figure2.B <- figure2.B + scale_fill_grey(start = 0.4, end = .8)
+figure2.B <- figure2.B + theme(text = element_text(size=20), 
+                               axis.line = element_line(linewidth = 1.25),
+                               axis.ticks = element_line(linewidth = 1.25),
+                               axis.ticks.length=unit(.25, "cm"),
+                               legend.key.size = unit(3,"line"))
+figure2 <- ggarrange(figure2.A, figure2.B, nrow = 1, ncol = 2, common.legend = TRUE, legend = "bottom")
 
-eRBB.BT <- BuyseTest(treatment ~ cont(toxicity.num, operator = "<0") + tte(OS, statusOS),
-                     data=dt.data, trace = FALSE)
-eRBB.Se <- sensitivity(eRBB.BT, threshold = list(1:5,c(0,5,10)),
-                       band = TRUE, adj.p.value = TRUE, seed = 10, trace = FALSE)
-
-eRBB.Hdecomp <- iid(eRBB.Se)
-eRBB.cor <- cor(eRBB.Hdecomp)
-
-## * generate figure 8
-
-rownames(eRBB.cor) <- paste0("tox=",eRBB.Se$toxicity.num,";OS=",eRBB.Se$OS,"")
-colnames(eRBB.cor) <- paste0("tox=",eRBB.Se$toxicity.num,";OS=",eRBB.Se$OS,"")
-
-pdf("figures/fig_software_corIID.pdf", width = 8, height = 8)
-par(mar  = c(6,6,2,2))
-fields::image.plot(eRBB.cor, axes = FALSE)
-axis(1, at=(1:15)/15, labels=rownames(eRBB.cor), las = 2)
-axis(2, at=(1:15)/15, labels=colnames(eRBB.cor), las = 2)
+graphics.off()
+pdf("figures/fig_software_OS-PFS-tox.pdf", width = 12, height = 8)
+figure2
 dev.off()
 
-
 ##----------------------------------------------------------------------
-### figureSoftware-8.R ends here
+### figureSoftware-2.R ends here

@@ -59,6 +59,7 @@ dt.bootLine <- dt.boot[, .(estimate = seq(-5,5,length.out=1000),
 
 
 ## ** generate figure
+theme_set(theme_bw())
 gg.histBoot <- ggplot()
 gg.histBoot <- gg.histBoot + geom_histogram(data = dt.boot, mapping = aes(x=estimate, y=after_stat(density)), color = "black")
 gg.histBoot <- gg.histBoot + geom_line(data = dt.bootLine, mapping = aes(x = estimate, y = density), color = "darkgrey", linewidth = 1.25)
