@@ -3,13 +3,13 @@
 ## Author: Brice Ozenne
 ## Created: Oct  9 2023 (10:13) 
 ## Version: 
-## Last-Updated: jun 24 2024 (14:32) 
+## Last-Updated: Jul  1 2024 (10:11) 
 ##           By: Brice Ozenne
-##     Update #: 115
+##     Update #: 123
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
-## 
+## Sections with the flag [EXTRA] contains R code that is not mentionned nor explained in the book chapter.
 ### Change Log:
 ##----------------------------------------------------------------------
 ## 
@@ -19,11 +19,12 @@ library(BuyseTest)
 library(asht)
 library(pim)
 library(WR)
-library(ggplot2)
+library(data.table)
+options(datatable.print.class = FALSE)
 
-## * 15.2 Setting the stage
+## * 16.2 Setting the stage
 
-## ** 15.1 [Extra] Introduction
+## ** 16.1 [Extra] Introduction
 data(FEVData, package = "pim")
 
 e.pim <- pim(FEV ~ Smoke , data = FEVData)
@@ -51,7 +52,7 @@ confint(e.BT, statistic = "favorable")
 c(e.asht$conf.int, e.asht$p.value)
 ## e.WR$pval 
 
-## ** 15.2.2 Generating synthetic data
+## ** 16.2.2 Generating synthetic data
 set.seed(10) ## initialize the pseudo-random number generator 
 dt0.data <- simBuyseTest(100)
 dt0.data
@@ -97,14 +98,33 @@ dtPC.toxW <- prop.table(table(dt.data$treatment,
                               dt.data$toxicity))
 dtPC.toxW * 100
 
+library(ggplot2)
 ggplot(dt.data, aes(x = toxicity, y = OS, fill = treatment)) + geom_boxplot()
 ggplot(dt.data, aes(x = toxicity, y = PFS, fill = treatment)) + geom_boxplot()
 
-## * 15.3 GPC with a single endpoint
+## * 16.3 GPC with a single endpoint
+## convert wide format to long format
 dtPC.toxL <- as.data.frame(dtPC.toxW, responseName = "Probability")
 names(dtPC.toxL)[1:2] <- c("treatment","grade")
 
-## ** 15.3.2 GPC analysis for completely-observed data
+## color scale
+colorG2R <- scales::seq_gradient_pal(low = rgb(green=0.9,0,0),
+                                     high = rgb(red=0.9,0,0))
+
+## left panel
+gg.tox <- ggplot(dtPC.toxL, aes(x = treatment, fill = grade, y = Probability))
+gg.tox <- gg.tox + geom_bar(position = position_fill(reverse = TRUE),
+                            stat = "identity")
+gg.tox <- gg.tox + scale_y_continuous(labels = scales::percent)
+gg.tox <- gg.tox + scale_fill_manual("Worse adverse event",
+                                     values = colorG2R(seq(0,1,length.out=6)))
+gg.tox
+
+## right panel
+library(prodlim)
+plot(prodlim(Hist(OS,statusOS) ~ treatment, data = dt.data))                             
+
+## ** 16.3.2 GPC analysis for completely-observed data
 dt.data$toxicity.num <- as.numeric(dt.data$toxicity)
 
 ## traditional Wilcoxon test
@@ -124,7 +144,7 @@ eTox.BTvarperm <- BuyseTest(treatment ~ cont(toxicity.num, operator = "<0"),
                  data = dt.data, method.inference = "varexact-permutation")
 confint(eTox.BTvarperm)
 
-## ** 15.3.3 Extracting treatment effect measures
+## ** 16.3.3 Extracting treatment effect measures
 confint(eTox.BT, statistic = "favorable", null = 0.5)
 
 eTox.BThalf <- BuyseTest(treatment ~ cont(toxicity.num, operator = "<0"),
@@ -139,7 +159,7 @@ BuyseTest.options(statistic = "winRatio", add.halfNeutral = FALSE)
 BuyseTest.options(reinitialise = TRUE)
 
 
-## ** 15.3.4 Methods for statistical inference
+## ** 16.3.4 Methods for statistical inference
 ## retrieving bootstrap distribution
 eTox.BTboot <- BuyseTest(treatment ~ cont(toxicity.num, operator = "<0"),
                          data = dt.data,
@@ -173,8 +193,10 @@ eTox.BTperm <- BuyseTest(treatment ~ cont(toxicity.num, operator = "<0"),
                          data = dt.data,
                          method.inference = "permutation", n.resampling = 1e5, cpus = 7, seed = 11)
 confint(eTox.BTperm)
+##              estimate         se lower.ci upper.ci null   p.value
+## toxicity.num  -0.0736 0.05593371       NA       NA    0 0.1897881
 
-## ** 15.3.5 Threshold of clinical relevance
+## ** 16.3.5 Threshold of clinical relevance
 eTox.BT2 <- BuyseTest(treatment ~ cont(toxicity.num, threshold = 2, operator = "<0"),
                      data=dt.data, keep.pairScore = TRUE, trace = FALSE)
 print(eTox.BT2)
@@ -185,7 +207,7 @@ dt.data[c(3:4,201),c("id","treatment","OS","statusOS","toxicity","gender")]
 
 model.tables(eTox.BT, columns = "threshold")
 
-## ** 15.3.6 Stratification
+## ** 16.3.6 Stratification
 ffG <- treatment ~ cont(toxicity.num, operator = "<0") + strata(gender)
 eTox.BTG <- BuyseTest(ffG, data=dt.data, keep.pairScore = TRUE, trace = FALSE)
 summary(eTox.BTG)
@@ -195,7 +217,7 @@ getPairScore(eTox.BTG)
 
 confint(eTox.BTG, strata = TRUE)
 
-## ** 15.3.7 Handling right-censoring when assessing efficacy
+## ** 16.3.7 Handling right-censoring when assessing efficacy
 
 dt.data[,.(censoring=mean(statusOS==0)),by = "treatment"]
 
@@ -210,7 +232,7 @@ eEff.BT2 <- BuyseTest(treatment ~ tte(OS, statusOS), data=dt.data,
                       scoring.rule = "Gehan", keep.pairScore = TRUE, trace = FALSE)
 print(eEff.BT2)
 
-getPairScore(eEff.BT2)[c(1,2,2623,8553),]
+### getPairScore(eEff.BT2)[c(1,2,2623,8553),]
 
 dt30.data <- data.table::copy(dt.data)
 dt30.data[OS>30, c("OS", "statusOS") := .(30,0)]
@@ -219,11 +241,10 @@ eEff.BT30 <- BuyseTest(treatment ~ tte(OS, statusOS, restriction = 25), data=dt3
                        keep.pairScore = TRUE, trace = FALSE)
 print(eEff.BT30)
 
-dt.data[c(44,211)]
 getPairScore(eEff.BT30)[index.C==44 & index.T == 211,]
-getPairScore(eEff.BT)[index.C==44 & index.T == 211,]
+dt.data[c(44,211)]
 
-## ** 15.3 [Extra] Analyzing data from cross-over trial using stratification
+## ** 16.3 [Extra] Analyzing data from cross-over trial using stratification
 
 ## *** single comparison within patient
 data("vasscoresL", package = "LMMstar")
@@ -395,7 +416,7 @@ dtS.resCO52
 ## 8:    80 corrected  1000 -0.007290 0.07454888 0.07517525 0.047
 
 
-## ** 15.3 [Extra] Multiple imputation
+## ** 16.3 [Extra] Multiple imputation
 dt.data$toxicityNA <- ifelse(rbinom(NROW(dt.data), size = 1, prob = 0.25),NA,dt.data$toxicity)
 table(dt.data$toxicityNA, useNA = "always")
 dt.data$toxicityNA <- as.factor(dt.data$toxicityNA)
@@ -424,9 +445,9 @@ tidy.S4BuyseTest <- function(x, conf.int = FALSE, conf.level = 0.95, ...) {
 summary(pool(eTox.MBT))
 
 
-## * 15.4 Benefit-risk analysis using GPC
+## * 16.4 Benefit-risk analysis using GPC
 
-## ** 15.4.1 Prioritized & non-prioritized analyses
+## ** 16.4.1 Prioritized & non-prioritized analyses
 eBRB.BT <- BuyseTest(treatment ~ tte(OS, statusOS) + cont(toxicity.num, operator = "<0"),
                      data=dt.data, trace = FALSE)
 print(eBRB.BT)
@@ -453,7 +474,7 @@ print(eRBB.BT2)
 rbind("prioritized" = confint(eRBB.BT, transform = FALSE, endpoint = 1),
       "non-prioritized" = confint(eNH.BT, transform = FALSE, endpoint = 1))
 
-## ** 15.4.2 Thresholds of clinical relevance
+## ** 16.4.2 Thresholds of clinical relevance
 
 eSH.BT <- BuyseTest(treatment ~ tte(OS, statusOS, threshold = 28)
                               + cont(toxicity.num, operator = "<0", threshold = 2)
@@ -462,7 +483,7 @@ eSH.BT <- BuyseTest(treatment ~ tte(OS, statusOS, threshold = 28)
                     data=dt.data, trace = FALSE)
 print(eSH.BT)
 
-## ** 15.4.3 Encoding of the outcome
+## ** 16.4.3 Encoding of the outcome
 
 dt.data$OS2 <- dt.data$OS
 dt.data$OS2[dt.data$statusOS==0] <- 150
@@ -479,13 +500,13 @@ dt.data$toxicity2[dt.data$statusOS==1] <- -1
 
 eBRB2.BT <- BuyseTest(treatment ~ bin(statusOS, operator = "<0") + cont(toxicity2, operator = "<0"), data=dt.data, trace = FALSE)
 print(eBRB2.BT)
+(1947 - 2279)/40000
 
 eR2.BT <- BuyseTest(treatment ~ cont(toxicity2, operator = "<0"),
                     data=dt.data[statusOS==0], trace = FALSE)
 print(eR2.BT, percentage = FALSE)
-(1947 - 2279)/40000
 
-## ** 15.4.4 Sensitivity analyses
+## ** 16.4.4 Sensitivity analyses
 eRBB.Se <- sensitivity(eRBB.BT, threshold = list(1:5,c(0,5,10)),
                        band = TRUE, adj.p.value = TRUE, seed = 10, trace = FALSE)
 eRBB.Se[c(1,2,6),]
@@ -507,9 +528,9 @@ e.MBT <- BuyseMultComp(list("OS-tox" = eBRB.BT, "tox-OS" = eRBB.BT, "threshold" 
                        seed = 10)
 e.MBT
 
-## * 15.5 Power calculation for GPC
+## * 16.5 Power calculation for GPC
 
-## ** 3.5.1 Data-generating mechanism
+## ** 16.5.1 Data-generating mechanism
 simFCT <- function(n.C, n.T){
      out <- rbind(data.frame(Y=stats::rt(n.C, df = 5), group=0),
                   data.frame(Y=stats::rt(n.T, df = 5) + 1, group=1))
@@ -530,7 +551,7 @@ simFCT2 <- function(n.T, n.C){
 set.seed(10)
 simFCT2(2,2)
 
-## ** 3.5.2 Simulation-based power and sample size estimation
+## ** 16.5.2 Simulation-based power and sample size estimation
 e.power <- powerBuyseTest(formula = treatment ~ tte(OS, statusOS, threshold = 5) + cont(toxicity, operator = "<0"),
                           sim = simFCT2, sample.size = c(10,50,100),
                           n.rep = 100, seed = 10)
