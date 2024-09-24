@@ -3,13 +3,13 @@
 ## Author: Brice Ozenne
 ## Created: Oct  9 2023 (10:12) 
 ## Version: 
-## Last-Updated: feb 17 2024 (15:30) 
+## Last-Updated: sep 24 2024 (17:43) 
 ##           By: Brice Ozenne
-##     Update #: 157
+##     Update #: 172
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
-## 
+##
 ### Change Log:
 ##----------------------------------------------------------------------
 ## 
@@ -21,6 +21,7 @@ options(width=75)
 library(BuyseTest)
 library(data.table)
 library(mvtnorm)
+library(ggplot2)
 
 ## * 1.3 Large sample distribution
 ## ** 1.3.1 Intuition
@@ -30,11 +31,13 @@ n.data <- 10
 dtInference <- simBuyseTest(n.data)
 dtInference[, score := round(score,1)]
 
-## table 1 --> see tableInference-1.R
+## figure 1 --> see figureInference-1.R
 
 ## ** 1.3.2 First order H-decomposition
 BuyseTest.options(order.Hprojection = 1)
 BTinference.H1 <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE)
+
+## figure 2 --> see figureInference-2.R
 
 #### Example (table 1.1)
 coef(BTinference.H1, statistic = "favorable")
@@ -66,32 +69,52 @@ getIid(BTinference.H1, statistic = "favorable", scale = FALSE, center = TRUE)[1]
 BuyseTest.options(order.Hprojection = 2)
 BTinference.H2 <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE)
 
+confint(BTinference.H2, statistic = "favorable", order.Hprojection = 1)$se^2
+## [1] 0.01228
+confint(BTinference.H2, statistic = "favorable", order.Hprojection = 2)$se^2
+## [1] 0.012976
+
 confint(BTinference.H2, statistic = "netBenefit", order.Hprojection = 1)
 ##       estimate        se   lower.ci   upper.ci null    p.value
 ## score    -0.48 0.2216303 -0.7959335 0.04142476    0 0.06936481
+0.2216303^2
+## [1] 0.04911999
 confint(BTinference.H2, statistic = "netBenefit", order.Hprojection = 2)
 ##       estimate        se   lower.ci   upper.ci null    p.value
 ## score    -0.48 0.2278245 -0.8016426 0.05716099    0 0.07728498
+0.2278245^2
+## [1] 0.051904
 
-
-## ** Demonstration: second order term is 0 for the net treatment benefit relative to single binary outcome
+## ** [Extra] Demonstration: second order term is 0 for the net treatment benefit relative to single binary outcome
 dtInference$toxicity <- relevel(dtInference$toxicity,"no")
 
 BuyseTest.options(order.Hprojection = 2)
 test.Ustat <- BuyseTest(treatment ~ bin(toxicity), data = dtInference, trace = FALSE)
 
+inf.Ustat1 <- confint(test.Ustat, statistic = "netBenefit", order.Hprojection = 1)
+inf.Ustat2 <- confint(test.Ustat, statistic = "netBenefit", order.Hprojection = 2)
+c(inf.Ustat1$se^2, inf.Ustat2$se^2, inf.Ustat1$se^2-inf.Ustat2$se^2)
+## [1] 4.500000e-02 4.500000e-02 1.387779e-17
+
 pTable <- prop.table(table(dtInference$toxicity,dtInference$treatment), margin = 2)
+##       C   T
+## no  0.6 0.7
+## yes 0.4 0.3
 Pw <- pTable["yes","T"]*pTable["no","C"]
 Pl <- pTable["yes","C"]*pTable["no","T"]
 Pn <- pTable["yes","C"]*pTable["yes","T"] + pTable["no","C"]*pTable["no","T"]
 
+## Net Treatment Benefit estimate
 Pw - Pl
-confint(test.Ustat, order.Hprojection = 1)$estimate
+## [1] -0.1
+inf.Ustat1$estimate
+## [1] -0.1
+
+## Net Treatment Benefit se (first order)
 (Pl*(1-Pl) + Pw*(1-Pw) + 2 * Pw * Pl)/n.data
-confint(test.Ustat, order.Hprojection = 1)$se^2
-crossprod(getIid(test.Ustat))
+## [1] 0.045
 
-
+## Expression of the iid terms
 table(getIid(test.Ustat)[dtInference$treatment=="T"])
 pTable["no","C"] - (Pw - Pl)
 - pTable["yes","C"] - (Pw - Pl)
@@ -101,6 +124,7 @@ pTable["yes","T"] - (Pw - Pl)
 - pTable["no","T"] - (Pw - Pl)
 
 
+## Expression of the square of the iid terms
 crossprod(getIid(test.Ustat)[dtInference$treatment=="T"])
 pTable["yes","T"]*(pTable["no","C"] - (Pw - Pl))^2 + pTable["no","T"] * (pTable["yes","C"] + (Pw - Pl))^2
 pTable["yes","T"]*(pTable["no","C"]^2 - 2*(Pw - Pl)*pTable["no","C"] + (Pw - Pl)^2) + pTable["no","T"]*(pTable["yes","C"]^2 + 2*(Pw - Pl)*pTable["yes","C"] + (Pw - Pl)^2)
@@ -111,11 +135,11 @@ crossprod(getIid(test.Ustat)[dtInference$treatment=="C"])
 pTable["no","C"]*(pTable["yes","T"] - (Pw - Pl))^2 + pTable["yes","C"] * (pTable["no","T"] + (Pw - Pl))^2
 pTable["no","C"]*(pTable["yes","T"]^2 - 2*(Pw - Pl)*pTable["yes","T"]) + pTable["yes","C"]*(pTable["no","T"]^2 + 2*(Pw - Pl)*pTable["no","T"])+ (Pw - Pl)^2
 
-
 crossprod(getIid(test.Ustat))
 pTable["yes","T"]*(pTable["no","C"]^2 - 2*(Pw - Pl)*pTable["no","C"]) + pTable["no","T"]*(pTable["yes","C"]^2 + 2*(Pw - Pl)*pTable["yes","C"])+ (Pw - Pl)^2 + pTable["no","C"]*(pTable["yes","T"]^2 - 2*(Pw - Pl)*pTable["yes","T"]) + pTable["yes","C"]*(pTable["no","T"]^2 + 2*(Pw - Pl)*pTable["no","T"])+ (Pw - Pl)^2
 pTable["yes","T"]*(pTable["no","C"]^2 - 2*(Pw - Pl)*pTable["no","C"]) + pTable["no","T"]*(pTable["yes","C"]^2 + 2*(Pw - Pl)*pTable["yes","C"]) + pTable["no","C"]*(pTable["yes","T"]^2 - 2*(Pw - Pl)*pTable["yes","T"]) + pTable["yes","C"]*(pTable["no","T"]^2 + 2*(Pw - Pl)*pTable["no","T"])+ 2*(Pw - Pl)^2
 
+## Simplify to the claimed result
 a <- pTable["yes","T"]*pTable["no","C"]^2 + pTable["no","T"]*pTable["yes","C"]^2 + pTable["no","C"]*pTable["yes","T"]^2 + pTable["yes","C"]*pTable["no","T"]^2
 a <- pTable["yes","T"]*pTable["no","C"]*(pTable["yes","T"]+pTable["no","C"]) + pTable["no","T"]*pTable["yes","C"]*(pTable["no","T"]+pTable["yes","C"])
 a <- Pw*(pTable["yes","T"]+pTable["no","C"]) + Pl*(pTable["no","T"]+pTable["yes","C"])
@@ -127,6 +151,7 @@ bb <- pTable["no","T"]+pTable["yes","C"]
 bb <- pTable["no","T"]*(pTable["yes","C"]+pTable["no","C"])+pTable["yes","C"]*(pTable["yes","T"]+pTable["no","T"])
 bb <- pTable["no","T"]*pTable["yes","C"]+pTable["no","T"]*pTable["no","C"]+pTable["yes","C"]*pTable["yes","T"]+pTable["yes","C"]*pTable["no","T"]
 bb <- Pl+Pn+Pl
+
 a <- Pw * (Pn + 2*Pw) + Pl * (Pn + 2*Pl) 
 
 b <- 2*(Pw - Pl) * (- pTable["yes","T"]*pTable["no","C"] + pTable["no","T"]*pTable["yes","C"] - pTable["no","C"]*pTable["yes","T"]+ pTable["yes","C"]*pTable["no","T"])
@@ -150,6 +175,10 @@ confint(test.Ustat2, order.Hprojection = 1)
 confint(test.Ustat2, order.Hprojection = 2)
 
 ## * 1.4 Comparison of inferential methods
+
+## figure 3 --> see figureInference-3.R
+## table 1.2 --> see tableInference-2.R
+
 ## ** 1.4.1 Confidence intervals and p-values based on asymptotic approximation
 
 #### Example (table 1.1)
@@ -221,6 +250,7 @@ tanh(tci)
 ## [1] 0.06936481
 
 ## ** 1.4.2 Bootstrap confidence intervals and p-values
+BuyseTest.options(order.Hprojection = 1)
 BTinference.boot <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE,
                               seed = 10, method.inference  = "studentized bootstrap", strata.resampling = "treatment",
                               n.resampling = 10^4)
@@ -541,6 +571,7 @@ score.C <- dtInference[treatment=="C",score]
 BTinference.H1 <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE)
 eSe0.BT <- sensitivity(BTinference.H1, threshold = 0:1, band = TRUE, adj.p.value = TRUE,
                        transformation = FALSE, trace = FALSE)
+eSe0.BT
 ##   score estimate        se   lower.ci    upper.ci null      p.value
 ## 1     0    -0.48 0.2216303 -0.9143875 -0.04561255    0 0.0303288719
 ## 2     1    -0.49 0.1475805 -0.7792524 -0.20074756    0 0.0008994584
@@ -609,7 +640,8 @@ eSe0.stats <- eSe0.BT$estimate / eSe0.BT$se
 ## [1] "Normal Completion"
 
 ## *** critical threshold
-qnorm.adj <- qmvnorm(0.95, mean = c(0,0), sigma = R, tail = "both.tails")
+qnorm.adj <- qmvnorm(0.95, mean = c(0,0), sigma = R, tail = "both.tails"
+qnorm.adj
 ## $quantile
 ## [1] 2.120035
 
@@ -628,6 +660,7 @@ cbind(lower = eSe0.BT$estimate - qnorm.adj$quantile * eSe0.BT$se,
 ## *** transformation
 eSe1.BT <- sensitivity(BTinference.H1, threshold = 0:1, band = TRUE, adj.p.value = TRUE,
                        transformation = TRUE, trace = FALSE)
+eSe1.BT
 ##   score estimate        se   lower.ci    upper.ci null     p.value
 ## 1     0    -0.48 0.2216303 -0.7959335  0.04142476    0 0.069364812
 ## 2     1    -0.49 0.1475805 -0.7243353 -0.15417562    0 0.005776528

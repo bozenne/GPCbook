@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: okt  9 2023 (14:57) 
 ## Version: 
-## Last-Updated: maj  7 2024 (10:44) 
+## Last-Updated: sep 24 2024 (17:44) 
 ##           By: Brice Ozenne
-##     Update #: 9
+##     Update #: 10
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -17,7 +17,7 @@
 
 library(ggplot2)
 
-## * generate figure 6
+## * generate figure 8
 allResS.tempo2 <- readRDS("results/aggregated-FWER.rds")
 allResSL.tempo2 <- data.table::melt(allResS.tempo2[,.(n,mu,power,power.band,power.bonf)], id.vars = c("n","mu"))
 allResSL.tempo2[, mu.legend := paste0("\u0394\u03bc=",mu)]

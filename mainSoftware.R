@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: Oct  9 2023 (10:13) 
 ## Version: 
-## Last-Updated: Jul  1 2024 (10:11) 
+## Last-Updated: sep 24 2024 (17:49) 
 ##           By: Brice Ozenne
-##     Update #: 123
+##     Update #: 124
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -178,9 +178,8 @@ eTox.BTboot2 <- BuyseTest(treatment ~ cont(toxicity.num, operator = "<0"),
                           data = dt.data, cpus = 7, strata.resampling = "treatment",
                           method.inference = "bootstrap", n.resampling = 1e4, seed = 11)
 confint(eTox.BTboot2, method.ci.resampling = "gaussian", transformation = FALSE)
-##              estimate         se   lower.ci  upper.ci null   p.value
-## toxicity.num  -0.0736 0.05630501 -0.1839558 0.0367558    0 0.1911563
-
+##             estimate         se   lower.ci   upper.ci null   p.value
+## toxicity.num  -0.0736 0.05620024 -0.1837504 0.03655045    0 0.1903302
 
 ## BuyseTest.options(order.Hprojection = 2)
 ## eTox.BT2 <- BuyseTest(treatment ~ cont(toxicity.num, operator = "<0"),

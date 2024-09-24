@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: Oct  9 2023 (11:38) 
 ## Version: 
-## Last-Updated: feb  9 2024 (15:11) 
+## Last-Updated: sep 24 2024 (17:44) 
 ##           By: Brice Ozenne
-##     Update #: 13
+##     Update #: 14
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -25,7 +25,7 @@ n.data <- 10
 dtInference <- simBuyseTest(n.data)
 dtInference[, score := round(score,1)]
 
-## * generate figure 3
+## * generate figure 5
 
 ## ** run GPC
 GPC.figure3 <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE,

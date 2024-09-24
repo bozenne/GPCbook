@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: Oct  9 2023 (10:17) 
 ## Version: 
-## Last-Updated: feb  9 2024 (15:46) 
+## Last-Updated: sep 24 2024 (14:14) 
 ##           By: Brice Ozenne
-##     Update #: 14
+##     Update #: 15
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -25,7 +25,7 @@ n.data <- 10
 dtInference <- simBuyseTest(n.data)
 dtInference[, score := round(score,1)]
 
-## * generate table 1
+## * generate table 2
 
 GPC <- BuyseTest(treatment ~ cont(score), data = dtInference, trace = FALSE)
 GPCfav.iid <- getIid(GPC, statistic = "favorable", scale = FALSE)
