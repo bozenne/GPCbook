@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: Oct  9 2023 (10:12) 
 ## Version: 
-## Last-Updated: sep 24 2024 (17:43) 
+## Last-Updated: Apr 21 2025 (18:55) 
 ##           By: Brice Ozenne
-##     Update #: 172
+##     Update #: 174
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -640,7 +640,7 @@ eSe0.stats <- eSe0.BT$estimate / eSe0.BT$se
 ## [1] "Normal Completion"
 
 ## *** critical threshold
-qnorm.adj <- qmvnorm(0.95, mean = c(0,0), sigma = R, tail = "both.tails"
+qnorm.adj <- qmvnorm(0.95, mean = c(0,0), sigma = R, tail = "both.tails")
 qnorm.adj
 ## $quantile
 ## [1] 2.120035

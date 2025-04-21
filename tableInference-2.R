@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: Oct  9 2023 (10:38) 
 ## Version: 
-## Last-Updated: sep 24 2024 (14:12) 
+## Last-Updated: Apr 21 2025 (18:48) 
 ##           By: Brice Ozenne
-##     Update #: 19
+##     Update #: 20
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -113,7 +113,7 @@ table2.10 <- dataTOtable2(dtInference10)
 ## stud.perm.no                                   0.061
 ## stud.perm.yes                                  0.058
 
-print(xtable(table2),include.rownames=FALSE)
+print(xtable(table2.10),include.rownames=FALSE)
 
 ## \begin{table}[ht]
 ## \centering
