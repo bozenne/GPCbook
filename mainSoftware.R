@@ -3,9 +3,9 @@
 ## Author: Brice Ozenne
 ## Created: Oct  9 2023 (10:13) 
 ## Version: 
-## Last-Updated: sep 24 2024 (17:49) 
+## Last-Updated: Jul 21 2025 (12:07) 
 ##           By: Brice Ozenne
-##     Update #: 124
+##     Update #: 130
 ##----------------------------------------------------------------------
 ## 
 ### Commentary: 
@@ -289,131 +289,121 @@ with(dfW.CO2, 2*((X2>X1) + (X2>X3) + (X4>X1) + (X4>X3))/4 - 1)
 sqrt((var(eCO2.Delta))/length(eCO2.Delta))
 
 ## *** simulation study - 1 sequence
-confintCO <- function(object){ ## object <- eCO.BT
-    iCI <- confint(object, strata = object@level.strata)
-    iDelta <- mean(iCI$estimate)
-    iSe <- sqrt((var(iCI$estimate))/NROW(iCI))
-    iOut <- BuyseTest:::confint_Ustatistic(Delta = atanh(iDelta), Delta.se = iSe/(1-iDelta^2), null = 0,
-                                           alternative = "two.sided", alpha = 0.05,
-                                           endpoint = "Y", backtransform.delta = tanh, backtransform.se = function(x,se){se*(1-tanh(x)^2)})
+if(FALSE){
+    warperCO51 <- function(i, n.arm, perm){ ## n.arm <- 50
 
-    return(iOut)
-}
+        treat <- rep(c("A","B"),2)
+        mu <- rep(0,4)
+        Rho <- 0.75-0.5*as.matrix(dist(treat=="A")) + diag(0.25,4,4)
+        dfW <- data.frame(id = 1:n.arm, mvtnorm::rmvnorm(n.arm, mean = mu, sigma = Rho))
+        dfL <- reshape(dfW, direction = "long", idvar = "id",
+                       times = rep(c("A","B"), 2), timevar = "treatment",
+                       varying = 2:5, v.names = "vas")
+        BT0 <- BuyseTest(treatment ~ cont(vas) + id,  data = dfL, trace = FALSE, method.inference = "u-statistic")
+        BT <- BuyseTest(treatment ~ cont(vas) + strata(id, match = TRUE),  data = dfL, trace = FALSE, method.inference = "u-statistic")
+        BT.perm <- BuyseTest(treatment ~ cont(vas) + id,  data = dfL, trace = FALSE, method.inference = "permutation", strata.resampling = "id")
 
-warperCO51 <- function(i, n.arm, perm){ ## n.arm <- 50
-
-    treat <- rep(c("A","B"),2)
-    mu <- rep(0,4)
-    Rho <- 0.75-0.5*as.matrix(dist(treat=="A")) + diag(0.25,4,4)
-    dfW <- data.frame(id = 1:n.arm, mvtnorm::rmvnorm(n.arm, mean = mu, sigma = Rho))
-    dfL <- reshape(dfW, direction = "long", idvar = "id",
-                   times = rep(c("A","B"), 2), timevar = "treatment",
-                   varying = 2:5, v.names = "vas")
-    BT <- BuyseTest(treatment ~ cont(vas) + id,  data = dfL, trace = FALSE)
-    BT.perm <- BuyseTest(treatment ~ cont(vas) + id,  data = dfL, trace = FALSE, method.inference = "permutation", strata.resampling = "id")
-
-    CI.naive <- data.frame(type = "naive", confint(BT))
-    CI.corrected <- data.frame(type = "corrected", confintCO(BT))
-    if(perm){
-        CI.perm <- data.frame(type = "perm", confint(BT.perm))
-        return(cbind(seed = i, n = n.arm, rbind(CI.naive, CI.corrected, CI.perm)))
-    }else{
-        return(cbind(seed = i, n = n.arm, rbind(CI.naive, CI.corrected)))
+        CI.naive <- data.frame(type = "naive", confint(BT0))
+        CI.corrected <- data.frame(type = "corrected", confint(BT))
+        if(perm){
+            CI.perm <- data.frame(type = "perm", confint(BT.perm))
+            return(cbind(seed = i, n = n.arm, rbind(CI.naive, CI.corrected, CI.perm)))
+        }else{
+            return(cbind(seed = i, n = n.arm, rbind(CI.naive, CI.corrected)))
+        }
     }
-    
+
+    library(pbapply)
+    ls.resCO51 <- pblapply(1:1000, function(i){
+        rbind(warperCO51(i, n.arm = 5, perm = FALSE),
+              warperCO51(i, n.arm = 10, perm = TRUE),
+              warperCO51(i, n.arm = 20, perm = FALSE),
+              warperCO51(i, n.arm = 40, perm = FALSE),
+              warperCO51(i, n.arm = 100, perm = FALSE))
+    }, cl = 100)
+
+    library(data.table)
+    dt.resCO51 <- as.data.table(do.call(rbind,ls.resCO51))
+    dtS.resCO51 <- dt.resCO51[, .(rep = .N, bias = mean(estimate), se = sd(estimate), seNA = sum(is.na(se)), sehat = mean(se, na.rm = TRUE), type1 = mean(p.value<=0.05, na.rm = TRUE)), by = c("n","type")]
+    dtS.resCO51
+    ##       n      type rep     bias         se seNA      sehat type1
+    ##  1:   5     naive 100  0.03600 0.35548232    0 0.14972661  0.41
+    ##  2:   5 corrected 100  0.03600 0.35548232    0 0.32202877  0.11
+    ##  3:  10     naive 100  0.03650 0.26475212    0 0.11123129  0.39
+    ##  4:  10 corrected 100  0.03650 0.26475212    0 0.24587069  0.07
+    ##  5:  10      perm 100  0.03650 0.26475212    0 0.20486373  0.12
+    ##  6:  20     naive 100  0.01450 0.17393906    0 0.08234632  0.32
+    ##  7:  20 corrected 100  0.01450 0.17393906    0 0.17818214  0.06
+    ##  8:  40     naive 100 -0.00050 0.12989069    0 0.05869331  0.40
+    ##  9:  40 corrected 100 -0.00050 0.12989069    0 0.12743405  0.06
+    ## 10: 100     naive 100 -0.00435 0.08705523    0 0.03705988  0.30
+    ## 11: 100 corrected 100 -0.00435 0.08705523    0 0.08143198  0.10
 }
-
-library(pbapply)
-ls.resCO51 <- pblapply(1:1000, function(i){
-    rbind(warperCO51(i, n.arm = 5, perm = FALSE),
-          warperCO51(i, n.arm = 10, perm = TRUE),
-          warperCO51(i, n.arm = 20, perm = FALSE),
-          warperCO51(i, n.arm = 40, perm = FALSE),
-          warperCO51(i, n.arm = 100, perm = FALSE))
-}, cl = 100)
-
-library(data.table)
-dt.resCO51 <- as.data.table(do.call(rbind,ls.resCO51))
-dtS.resCO51 <- dt.resCO51[, .(rep = .N, bias = mean(estimate), se = sd(estimate), seNA = sum(is.na(se)), sehat = mean(se, na.rm = TRUE), type1 = mean(p.value<=0.05, na.rm = TRUE)), by = c("n","type")]
-dtS.resCO51
-##         n      type   rep       bias         se  seNA      sehat      type1
-##     <num>    <char> <int>      <num>      <num> <int>      <num>      <num>
-##  1:     5     naive  1000  0.0025000 0.37808292     0 0.15117129 0.42500000
-##  2:     5 corrected  1000  0.0025000 0.37808292     5 0.35591199 0.08844221
-##  3:    10     naive  1000  0.0008000 0.26611121     0 0.11136246 0.39300000
-##  4:    10 corrected  1000  0.0008000 0.26611121     0 0.25842224 0.04600000
-##  5:    10      perm  1000  0.0008000 0.26611121     0 0.20371183 0.11100000
-##  6:    20     naive  1000  0.0026000 0.18265844     0 0.08059622 0.38100000
-##  7:    20 corrected  1000  0.0026000 0.18265844     0 0.18408208 0.04600000
-##  8:    40     naive  1000 -0.0027125 0.13028487     0 0.05716630 0.39500000
-##  9:    40 corrected  1000 -0.0027125 0.13028487     0 0.13044876 0.03800000
-## 10:   100     naive  1000 -0.0006400 0.08022859     0 0.03650759 0.37900000
-## 11:   100 corrected  1000 -0.0006400 0.08022859     0 0.08238939 0.04000000
 
 ## *** simulation study - 2 sequences
-simCrossOver <- function(n.arm, n.time, delta, k.sigma, rho.common, rho.diff,
-                         seed = NULL){
-    if(!is.null(seed)){set.seed(seed)}
+if(FALSE){
+    simCrossOver <- function(n.arm, n.time, delta, k.sigma, rho.common, rho.diff,
+                             seed = NULL){
+        if(!is.null(seed)){set.seed(seed)}
 
-    treat <- rep(c("A","B"),5)
-    muAB <- c(A = 0, B = delta)[treat]
-    muBA <- c(A = 0, B = delta)[rev(treat)]
+        treat <- rep(c("A","B"),5)
+        muAB <- c(A = 0, B = delta)[treat]
+        muBA <- c(A = 0, B = delta)[rev(treat)]
 
-    Rho <- rho.common-(rho.common-rho.diff)*as.matrix(dist(treat=="A"))
-    diag(Rho) <- 1
-    OmegaAB <- tcrossprod(rep(c(1,k.sigma),n.time))*Rho
-    OmegaBA <- tcrossprod(rep(c(k.sigma,1),n.time))*Rho
+        Rho <- rho.common-(rho.common-rho.diff)*as.matrix(dist(treat=="A"))
+        diag(Rho) <- 1
+        OmegaAB <- tcrossprod(rep(c(1,k.sigma),n.time))*Rho
+        OmegaBA <- tcrossprod(rep(c(k.sigma,1),n.time))*Rho
 
-    dfW.AB <- data.frame(id = 1:n.arm, sequence = "AB", mvtnorm::rmvnorm(n.arm, mean = muAB, sigma = OmegaAB))
-    dfL.AB <- reshape(dfW.AB, direction = "long", idvar = "id",
-                      times = rep(c("A","B"),n.time), timevar = "treatment",
-                      varying = 3:12, v.names = "Y")
-    dfW.BA <- data.frame(id = (n.arm+1):(2*n.arm), sequence = "BA", mvtnorm::rmvnorm(n.arm, mean = muBA, sigma = OmegaBA))
-    dfL.BA <- reshape(dfW.BA, direction = "long", idvar = "id",
-                      times = rep(c("B","A"),n.time), timevar = "treatment",
-                      varying = 3:12, v.names = "Y")
-    return(rbind(dfL.AB,dfL.BA))
+        dfW.AB <- data.frame(id = 1:n.arm, sequence = "AB", mvtnorm::rmvnorm(n.arm, mean = muAB, sigma = OmegaAB))
+        dfL.AB <- reshape(dfW.AB, direction = "long", idvar = "id",
+                          times = rep(c("A","B"),n.time), timevar = "treatment",
+                          varying = 3:12, v.names = "Y")
+        dfW.BA <- data.frame(id = (n.arm+1):(2*n.arm), sequence = "BA", mvtnorm::rmvnorm(n.arm, mean = muBA, sigma = OmegaBA))
+        dfL.BA <- reshape(dfW.BA, direction = "long", idvar = "id",
+                          times = rep(c("B","A"),n.time), timevar = "treatment",
+                          varying = 3:12, v.names = "Y")
+        return(rbind(dfL.AB,dfL.BA))
+    }
+
+
+    df.CO <- simCrossOver(n.arm = 10, n.time = 5, delta = 0.5, k.sigma = 1.5, rho.common = 0.75, rho.diff = 0.5, seed = 2)
+    eCO.BT <- BuyseTest(treatment ~ cont(Y) + strata(id, match = TRUE),  data = df.CO)
+    confint(eCO.BT)
+
+    warperCO52 <- function(i, n.arm){ ## n.arm <- 50
+        iData <- simCrossOver(n.arm = n.arm, n.time = 5, delta = 0, k.sigma = 1.5, rho.common = 0.75, rho.diff = 0.5)
+        iBT0 <- BuyseTest(treatment ~ cont(Y) + id,  data = iData, trace = FALSE)
+        iBT <- BuyseTest(treatment ~ cont(Y) + strata(id, match = TRUE),  data = iData, trace = FALSE)
+        iCI.naive <- data.frame(type = "naive", confint(iBT0))
+        iCI.corrected <- data.frame(type = "corrected", confint(iBT))
+        iOut <- cbind(seed = i, n = n.arm*2, rbind(iCI.naive, iCI.corrected))
+        return(iOut)      
+    }
+
+
+    library(pbapply)
+    ls.resCO52 <- pblapply(1:1000, function(i){
+        rbind(warperCO52(i, n.arm = 5),
+              warperCO52(i, n.arm = 10),
+              warperCO52(i, n.arm = 20),
+              warperCO52(i, n.arm = 40))
+    }, cl = 15)
+
+    library(data.table)
+    dt.resCO52 <- as.data.table(do.call(rbind,ls.resCO52))
+    dtS.resCO52 <- dt.resCO52[, .(rep = .N, bias = mean(estimate), se = sd(estimate), sehat = mean(se), type1 = mean(p.value<=0.05)), by = c("n","type")]
+    dtS.resCO52
+    ##     n      type  rep      bias         se      sehat type1
+    ## 1: 10     naive 1000 -0.016560 0.21098180 0.08875425 0.412
+    ## 2: 10 corrected 1000 -0.016560 0.21098180 0.19963274 0.071
+    ## 3: 20     naive 1000  0.003608 0.14608360 0.06332247 0.390
+    ## 4: 20 corrected 1000  0.003608 0.14608360 0.14533031 0.062
+    ## 5: 40     naive 1000 -0.001812 0.10421605 0.04485447 0.384
+    ## 6: 40 corrected 1000 -0.001812 0.10421605 0.10446751 0.046
+    ## 7: 80     naive 1000 -0.003558 0.07171517 0.03164180 0.390
+    ## 8: 80 corrected 1000 -0.003558 0.07171517 0.07466339 0.039
 }
-
-
-df.CO <- simCrossOver(n.arm = 10, n.time = 5, delta = 0.5, k.sigma = 1.5, rho.common = 0.75, rho.diff = 0.5, seed = 2)
-eCO.BT <- BuyseTest(treatment ~ cont(Y) + id,  data = df.CO)
-confint(eCO.BT)
-confintCO(eCO.BT)
-
-warperCO52 <- function(i, n.arm){ ## n.arm <- 50
-    iData <- simCrossOver(n.arm = n.arm, n.time = 5, delta = 0, k.sigma = 1.5, rho.common = 0.75, rho.diff = 0.5)
-    iBT <- BuyseTest(treatment ~ cont(Y) + id,  data = iData, trace = FALSE)
-    iCI.naive <- data.frame(type = "naive", confint(iBT))
-    iCI.corrected <- data.frame(type = "corrected", confintCO(iBT))
-    iOut <- cbind(seed = i, n = n.arm*2, rbind(iCI.naive, iCI.corrected))
-    return(iOut)      
-}
-
-
-library(pbapply)
-ls.resCO52 <- pblapply(1:1000, function(i){
-    rbind(warperCO52(i, n.arm = 5),
-          warperCO52(i, n.arm = 10),
-          warperCO52(i, n.arm = 20),
-          warperCO52(i, n.arm = 40))
-}, cl = 100)
-
-library(data.table)
-dt.resCO52 <- as.data.table(do.call(rbind,ls.resCO52))
-dtS.resCO52 <- dt.resCO52[, .(rep = .N, bias = mean(estimate), se = sd(estimate), sehat = mean(se), type1 = mean(p.value<=0.05)), by = c("n","type")]
-dtS.resCO52
-##        n      type   rep      bias         se      sehat type1
-##    <num>    <char> <int>     <num>      <num>      <num> <num>
-## 1:    10     naive  1000  0.000248 0.21251767 0.08883136 0.436
-## 2:    10 corrected  1000  0.000248 0.21251767 0.21062651 0.057
-## 3:    20     naive  1000 -0.002488 0.15057789 0.06299482 0.429
-## 4:    20 corrected  1000 -0.002488 0.15057789 0.14980091 0.048
-## 5:    40     naive  1000  0.001736 0.10311579 0.04474594 0.397
-## 6:    40 corrected  1000  0.001736 0.10311579 0.10612132 0.044
-## 7:    80     naive  1000 -0.007290 0.07454888 0.03159631 0.409
-## 8:    80 corrected  1000 -0.007290 0.07454888 0.07517525 0.047
-
 
 ## ** 16.3 [Extra] Multiple imputation
 dt.data$toxicityNA <- ifelse(rbinom(NROW(dt.data), size = 1, prob = 0.25),NA,dt.data$toxicity)
